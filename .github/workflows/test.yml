@@ -5,33 +5,73 @@ on:
     branches: [ main, dev ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   test:
+    name: Test Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
       
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e .
+          pip install pytest pytest-cov
       
       - name: Run tests
-        run: pytest --cov=havn --cov-report=xml
+        run: pytest tests/ -v --cov=havn --cov-report=xml --cov-report=term
       
       - name: Upload coverage
+        if: matrix.python-version == '3.11'
         uses: codecov/codecov-action@v3
         with:
           file: ./coverage.xml
           fail_ci_if_error: false
+  
+  lint:
+    name: Lint and style check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black isort
+      
+      - name: Check formatting with black
+        run: black --check havn/ tests/
+        continue-on-error: true
+      
+      - name: Check imports with isort
+        run: isort --check-only havn/ tests/
+        continue-on-error: true
+      
+      - name: Lint with flake8
+        run: flake8 havn/ tests/ --max-line-length=100 --exclude=__pycache__
+        continue-on-error: true

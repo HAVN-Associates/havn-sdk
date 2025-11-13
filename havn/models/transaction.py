@@ -1,0 +1,201 @@
+"""
+Transaction models for HAVN SDK
+"""
+
+from typing import Optional, Dict, Any, List
+from dataclasses import dataclass, field, asdict
+
+
+@dataclass
+class TransactionPayload:
+    """
+    Transaction payload for webhook
+
+    Attributes:
+        amount: Final transaction amount in cents (required)
+        referral_code: Associate referral code (optional)
+        promo_code: Voucher code (optional)
+        currency: Currency code (default: USD)
+        customer_type: NEW_CUSTOMER or RECURRING (default: NEW_CUSTOMER)
+        subtotal_transaction: Original amount before discount (optional)
+        acquisition_method: VOUCHER, REFERRAL, or REFERRAL_VOUCHER (auto-determined)
+        custom_fields: Custom metadata dict (max 3 entries) (optional)
+        invoice_id: External invoice ID (optional)
+        customer_id: External customer ID (optional)
+        customer_email: Customer email (optional)
+        transaction_type: Transaction type (optional)
+        description: Transaction description (optional)
+        payment_gateway_transaction_id: Payment gateway transaction ID (optional)
+        is_recurring: Whether transaction is recurring (optional)
+
+    Example:
+        >>> payload = TransactionPayload(
+        ...     amount=10000,
+        ...     referral_code="HAVN-MJ-001",
+        ...     currency="USD"
+        ... )
+        >>> payload.to_dict()
+    """
+
+    amount: int
+    referral_code: Optional[str] = None
+    promo_code: Optional[str] = None
+    currency: str = "USD"
+    customer_type: str = "NEW_CUSTOMER"
+    subtotal_transaction: Optional[int] = None
+    acquisition_method: Optional[str] = None
+    custom_fields: Optional[Dict[str, Any]] = None
+    invoice_id: Optional[str] = None
+    customer_id: Optional[str] = None
+    customer_email: Optional[str] = None
+    transaction_type: Optional[str] = None
+    description: Optional[str] = None
+    payment_gateway_transaction_id: Optional[str] = None
+    is_recurring: Optional[bool] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary, removing None values"""
+        return {k: v for k, v in asdict(self).items() if v is not None}
+
+    def validate(self) -> None:
+        """
+        Validate payload
+
+        Raises:
+            ValueError: If validation fails
+        """
+        from ..utils.validators import (
+            validate_amount,
+            validate_currency,
+            validate_custom_fields,
+            validate_referral_code,
+        )
+
+        # Validate amount
+        validate_amount(self.amount)
+
+        # Validate currency
+        validate_currency(self.currency)
+
+        # Validate custom_fields
+        validate_custom_fields(self.custom_fields)
+
+        # Validate referral_code
+        validate_referral_code(self.referral_code)
+
+        # Validate customer_type
+        if self.customer_type not in ["NEW_CUSTOMER", "RECURRING"]:
+            raise ValueError(
+                f"Invalid customer_type: {self.customer_type}. "
+                "Must be 'NEW_CUSTOMER' or 'RECURRING'"
+            )
+
+        # Validate subtotal_transaction
+        if self.subtotal_transaction is not None:
+            validate_amount(self.subtotal_transaction)
+            if self.subtotal_transaction < self.amount:
+                raise ValueError(
+                    "subtotal_transaction must be greater than or equal to amount"
+                )
+
+
+@dataclass
+class CommissionData:
+    """Commission data from response"""
+
+    commission_id: str
+    associate_id: str
+    level: int
+    amount: int
+    percentage: float
+    type: str
+    direction: str
+    status: str
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CommissionData":
+        """Create from dictionary"""
+        return cls(
+            commission_id=data.get("commission_id", ""),
+            associate_id=data.get("associate_id", ""),
+            level=data.get("level", 0),
+            amount=data.get("amount", 0),
+            percentage=data.get("percentage", 0.0),
+            type=data.get("type", ""),
+            direction=data.get("direction", ""),
+            status=data.get("status", ""),
+        )
+
+
+@dataclass
+class TransactionData:
+    """Transaction data from response"""
+
+    transaction_id: str
+    amount: int
+    currency: str
+    status: str
+    customer_type: str
+    acquisition_method: Optional[str] = None
+    subtotal_transaction: Optional[int] = None
+    subtotal_discount: Optional[int] = None
+    created_at: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TransactionData":
+        """Create from dictionary"""
+        return cls(
+            transaction_id=data.get("transaction_id", ""),
+            amount=data.get("amount", 0),
+            currency=data.get("currency", "USD"),
+            status=data.get("status", ""),
+            customer_type=data.get("customer_type", ""),
+            acquisition_method=data.get("acquisition_method"),
+            subtotal_transaction=data.get("subtotal_transaction"),
+            subtotal_discount=data.get("subtotal_discount"),
+            created_at=data.get("created_at"),
+        )
+
+
+@dataclass
+class TransactionResponse:
+    """
+    Transaction webhook response
+
+    Attributes:
+        success: Whether request was successful
+        message: Response message
+        transaction: Transaction data
+        commissions: List of commission data
+        raw_response: Raw response dictionary
+    """
+
+    success: bool
+    message: str
+    transaction: TransactionData
+    commissions: List[CommissionData] = field(default_factory=list)
+    raw_response: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TransactionResponse":
+        """
+        Create from API response dictionary
+
+        Args:
+            data: Response dictionary from API
+
+        Returns:
+            TransactionResponse instance
+        """
+        transaction_data = data.get("transaction", {})
+        commissions_data = data.get("commissions", [])
+
+        return cls(
+            success=data.get("success", False),
+            message=data.get("message", ""),
+            transaction=TransactionData.from_dict(transaction_data),
+            commissions=[
+                CommissionData.from_dict(c) for c in commissions_data
+            ],
+            raw_response=data,
+        )

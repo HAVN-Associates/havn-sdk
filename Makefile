@@ -35,4 +35,4 @@ build: clean
 	python setup.py sdist bdist_wheel
 
 publish: build
-	twine upload dist/*
+	twine upload dist/*.whl dist/*.tar.gz

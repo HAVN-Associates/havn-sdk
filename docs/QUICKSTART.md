@@ -6,6 +6,8 @@ Get started with HAVN Python SDK in 5 minutes.
 
 ```bash
 pip install havn-sdk
+or
+pip install git+https://github.com/HAVN-Associates/havn-sdk.git
 ```
 
 ## Basic Setup
@@ -13,6 +15,7 @@ pip install havn-sdk
 ### 1. Get Your Credentials
 
 You'll need two credentials from HAVN dashboard:
+
 - **API Key** - For authentication
 - **Webhook Secret** - For signing requests
 

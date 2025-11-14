@@ -5,14 +5,15 @@ on:
     branches:
       - main
     paths-ignore:
-      - '**.md'
-      - '.github/**'
-      - 'docs/**'
-      - 'examples/**'
+      - "**.md"
+      - "docs/**"
+      - "examples/**"
+      - "CHANGELOG.md"
+      - "README.md"
   workflow_dispatch:
     inputs:
       version_bump:
-        description: 'Version bump type'
+        description: "Version bump type"
         required: true
         type: choice
         options:
@@ -28,20 +29,28 @@ jobs:
   version-bump:
     name: Bump Version & Create Release
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[skip version]')"
-    
+    # Run if:
+    # 1. Manual trigger (workflow_dispatch), OR
+    # 2. Push to main and commit message doesn't contain [skip version]
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' &&
+       (github.event.head_commit.message == null ||
+        !contains(github.event.head_commit.message, '[skip version]')))
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
-      
+          fetch-tags: true
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      
+          python-version: "3.11"
+
       - name: Get current version
         id: current_version
         run: |
@@ -53,7 +62,7 @@ jobs:
           fi
           echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
           echo "Current version: $CURRENT_VERSION"
-      
+
       - name: Determine version bump type
         id: bump_type
         run: |
@@ -62,11 +71,13 @@ jobs:
           else
             # Auto-detect dari commit message
             COMMIT_MSG="${{ github.event.head_commit.message }}"
-            if echo "$COMMIT_MSG" | grep -qE "^(feat|feature)(\(.+\))?:"; then
+            if [ -z "$COMMIT_MSG" ]; then
+              BUMP_TYPE="patch"  # Default jika commit message kosong
+            elif echo "$COMMIT_MSG" | grep -qiE "^(feat|feature)(\(.+\))?:"; then
               BUMP_TYPE="minor"
-            elif echo "$COMMIT_MSG" | grep -qE "^(fix|bugfix)(\(.+\))?:"; then
+            elif echo "$COMMIT_MSG" | grep -qiE "^(fix|bugfix)(\(.+\))?:"; then
               BUMP_TYPE="patch"
-            elif echo "$COMMIT_MSG" | grep -qE "^(break|breaking)(\(.+\))?:"; then
+            elif echo "$COMMIT_MSG" | grep -qiE "^(break|breaking)(\(.+\))?:"; then
               BUMP_TYPE="major"
             else
               BUMP_TYPE="patch"  # Default to patch
@@ -74,18 +85,18 @@ jobs:
           fi
           echo "type=$BUMP_TYPE" >> $GITHUB_OUTPUT
           echo "Bump type: $BUMP_TYPE"
-      
+
       - name: Calculate new version
         id: new_version
         run: |
           CURRENT="${{ steps.current_version.outputs.version }}"
           BUMP_TYPE="${{ steps.bump_type.outputs.type }}"
-          
+
           IFS='.' read -ra VERSION_PARTS <<< "$CURRENT"
           MAJOR="${VERSION_PARTS[0]}"
           MINOR="${VERSION_PARTS[1]}"
           PATCH="${VERSION_PARTS[2]}"
-          
+
           case "$BUMP_TYPE" in
             major)
               MAJOR=$((MAJOR + 1))
@@ -100,22 +111,37 @@ jobs:
               PATCH=$((PATCH + 1))
               ;;
           esac
-          
+
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "New version: $NEW_VERSION"
-      
+
+      - name: Fetch all tags
+        run: |
+          git fetch --tags --force
+          echo "Fetched all tags"
+
       - name: Check if tag exists
         id: check_tag
         run: |
           TAG="v${{ steps.new_version.outputs.version }}"
+          # Check locally first
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Tag $TAG already exists, skipping version bump"
+            echo "Tag $TAG already exists locally, skipping version bump"
+          # Check remote via API
+          elif curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/git/refs/tags/$TAG" \
+            | grep -q '"ref"'; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag $TAG already exists on remote, skipping version bump"
           else
             echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Tag $TAG does not exist, proceeding with version bump"
           fi
-      
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Update version in setup.py
         if: steps.check_tag.outputs.exists == 'false'
         run: |
@@ -123,7 +149,7 @@ jobs:
           # GitHub Actions runs on Linux, so use standard sed
           sed -i "s/version=\"[^\"]*\"/version=\"$NEW_VERSION\"/" setup.py
           echo "Updated setup.py to version $NEW_VERSION"
-      
+
       - name: Update version in havn/__init__.py
         if: steps.check_tag.outputs.exists == 'false'
         run: |
@@ -131,46 +157,65 @@ jobs:
           # GitHub Actions runs on Linux, so use standard sed
           sed -i "s/__version__ = \"[^\"]*\"/__version__ = \"$NEW_VERSION\"/" havn/__init__.py
           echo "Updated havn/__init__.py to version $NEW_VERSION"
-      
+
       - name: Update CHANGELOG.md
         if: steps.check_tag.outputs.exists == 'false'
         run: |
           NEW_VERSION="${{ steps.new_version.outputs.version }}"
           TODAY=$(date +%Y-%m-%d)
-          
+
           # Create new changelog entry
           cat > /tmp/changelog_entry.txt <<EOF
           ## [$NEW_VERSION] - $TODAY
-          
+
           ### Changed
           - Auto-bumped version to $NEW_VERSION
-          
+
           EOF
-          
+
           # Insert after "## [Unreleased]" line
           if [ -f CHANGELOG.md ]; then
             # GitHub Actions runs on Linux, so use standard sed
             sed -i "/## \[Unreleased\]/r /tmp/changelog_entry.txt" CHANGELOG.md
           fi
-      
+
       - name: Commit version bump
         if: steps.check_tag.outputs.exists == 'false'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
+
+          # Check if there are changes to commit
           git add setup.py havn/__init__.py CHANGELOG.md
-          git commit -m "chore: bump version to ${{ steps.new_version.outputs.version }} [skip ci]" || exit 0
-          git push origin main
-      
+          if git diff --staged --quiet; then
+            echo "No changes to commit, version already up to date"
+          else
+            git commit -m "chore: bump version to ${{ steps.new_version.outputs.version }} [skip ci]" || exit 0
+            git push origin main || echo "Push failed or no changes"
+          fi
+
       - name: Create tag
         if: steps.check_tag.outputs.exists == 'false'
         run: |
           TAG="v${{ steps.new_version.outputs.version }}"
-          git tag -a "$TAG" -m "Release $TAG"
-          git push origin "$TAG"
-          echo "Created tag: $TAG"
-      
+          # Create annotated tag
+          git tag -a "$TAG" -m "Release $TAG" || {
+            echo "Failed to create tag locally"
+            exit 1
+          }
+          # Push tag to remote
+          git push origin "$TAG" || {
+            echo "Failed to push tag, checking if it exists on remote"
+            # Check if tag exists on remote
+            if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+              echo "Tag already exists on remote, skipping push"
+            else
+              echo "Tag push failed"
+              exit 1
+            fi
+          }
+          echo "✅ Created and pushed tag: $TAG"
+
       - name: Extract changelog
         if: steps.check_tag.outputs.exists == 'false'
         id: changelog
@@ -185,7 +230,7 @@ jobs:
           else
             echo "Release v$VERSION" > release_notes.md
           fi
-      
+
       - name: Create GitHub Release
         if: steps.check_tag.outputs.exists == 'false'
         uses: softprops/action-gh-release@v1
@@ -198,7 +243,7 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Summary
         if: steps.check_tag.outputs.exists == 'false'
         run: |
@@ -210,4 +255,3 @@ jobs:
           echo "**Tag**: \`v${{ steps.new_version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Release akan otomatis trigger publish workflow ke PyPI." >> $GITHUB_STEP_SUMMARY
-

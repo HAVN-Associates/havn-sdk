@@ -60,8 +60,17 @@ jobs:
           else
             CURRENT_VERSION=$(grep "__version__ = " havn/__init__.py | sed -E "s/.*__version__ = [\"']([^\"']+)[\"'].*/\\1/" || echo "0.0.0")
           fi
+
+          # Validate we got a version
+          if [ -z "$CURRENT_VERSION" ] || [ "$CURRENT_VERSION" = "None" ]; then
+            echo "❌ Failed to extract version from havn/__init__.py"
+            echo "File content:"
+            cat havn/__init__.py | grep __version__ || echo "No __version__ found"
+            exit 1
+          fi
+
           echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          echo "Current version: $CURRENT_VERSION"
+          echo "✅ Current version detected: $CURRENT_VERSION"
 
       - name: Determine version bump type
         id: bump_type
@@ -92,10 +101,23 @@ jobs:
           CURRENT="${{ steps.current_version.outputs.version }}"
           BUMP_TYPE="${{ steps.bump_type.outputs.type }}"
 
+          # Validate version format
+          if ! echo "$CURRENT" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "❌ Invalid version format: $CURRENT"
+            echo "Expected format: X.Y.Z (e.g., 1.0.0)"
+            exit 1
+          fi
+
           IFS='.' read -ra VERSION_PARTS <<< "$CURRENT"
           MAJOR="${VERSION_PARTS[0]}"
           MINOR="${VERSION_PARTS[1]}"
           PATCH="${VERSION_PARTS[2]}"
+
+          # Validate numbers
+          if ! [[ "$MAJOR" =~ ^[0-9]+$ ]] || ! [[ "$MINOR" =~ ^[0-9]+$ ]] || ! [[ "$PATCH" =~ ^[0-9]+$ ]]; then
+            echo "❌ Invalid version numbers: MAJOR=$MAJOR MINOR=$MINOR PATCH=$PATCH"
+            exit 1
+          fi
 
           case "$BUMP_TYPE" in
             major)
@@ -110,11 +132,17 @@ jobs:
             patch)
               PATCH=$((PATCH + 1))
               ;;
+            *)
+              echo "❌ Invalid bump type: $BUMP_TYPE"
+              exit 1
+              ;;
           esac
 
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "New version: $NEW_VERSION"
+          echo "✅ Current version: $CURRENT"
+          echo "✅ Bump type: $BUMP_TYPE"
+          echo "✅ New version: $NEW_VERSION"
 
       - name: Fetch all tags
         run: |
@@ -188,29 +216,60 @@ jobs:
           # Check if there are changes to commit
           git add setup.py havn/__init__.py CHANGELOG.md
           if git diff --staged --quiet; then
-            echo "No changes to commit, version already up to date"
+            echo "⚠️ No changes to commit, version already up to date"
           else
-            git commit -m "chore: bump version to ${{ steps.new_version.outputs.version }} [skip ci]" || exit 0
-            git push origin main || echo "Push failed or no changes"
+            COMMIT_MSG="chore: bump version to ${{ steps.new_version.outputs.version }} [skip ci]"
+            git commit -m "$COMMIT_MSG" || {
+              echo "⚠️ Commit failed or no changes"
+              exit 0
+            }
+            git push origin main || {
+              echo "⚠️ Push failed, trying to fetch and retry"
+              git fetch origin main
+              git pull --rebase origin main
+              git push origin main || {
+                echo "❌ Push failed after retry"
+                exit 1
+              }
+            }
+            echo "✅ Committed and pushed version bump"
           fi
+
+      - name: Fetch latest commits
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          # Fetch latest commits and tags after push
+          git fetch origin main --tags --force
+          git checkout main
+          git pull origin main
+          echo "✅ Fetched latest commits and tags"
 
       - name: Create tag
         if: steps.check_tag.outputs.exists == 'false'
         run: |
           TAG="v${{ steps.new_version.outputs.version }}"
-          # Create annotated tag
-          git tag -a "$TAG" -m "Release $TAG" || {
-            echo "Failed to create tag locally"
+
+          # Get latest commit SHA
+          LATEST_COMMIT=$(git rev-parse HEAD)
+          echo "Creating tag $TAG from commit: $LATEST_COMMIT"
+
+          # Create annotated tag from latest commit
+          git tag -a "$TAG" "$LATEST_COMMIT" -m "Release $TAG" || {
+            echo "❌ Failed to create tag locally"
             exit 1
           }
+
           # Push tag to remote
           git push origin "$TAG" || {
-            echo "Failed to push tag, checking if it exists on remote"
+            echo "⚠️ Failed to push tag, checking if it exists on remote"
             # Check if tag exists on remote
-            if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
-              echo "Tag already exists on remote, skipping push"
+            git fetch --tags --force
+            if git rev-parse "$TAG" >/dev/null 2>&1; then
+              echo "✅ Tag already exists on remote, skipping push"
+            elif git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+              echo "✅ Tag already exists on remote, skipping push"
             else
-              echo "Tag push failed"
+              echo "❌ Tag push failed"
               exit 1
             fi
           }

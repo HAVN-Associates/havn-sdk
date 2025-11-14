@@ -198,23 +198,70 @@ except HAVNAPIError as e:
     print(f"API error: {e}")
 ```
 
-## API Reference
+## Documentation
 
-### Client Methods
+Dokumentasi lengkap tersedia di folder `docs/`:
 
+### 📚 Panduan Lengkap
+
+- **[Quick Start Guide](docs/QUICKSTART.md)** - Mulai menggunakan SDK dalam 5 menit
+- **[API Reference](docs/API_REFERENCE.md)** - Dokumentasi lengkap semua methods dan parameters
+- **[Concepts Guide](docs/CONCEPTS.md)** - Memahami konsep dasar dan arsitektur SDK
+- **[Examples](docs/EXAMPLES.md)** - Contoh penggunaan lengkap berbagai skenario
+- **[Configuration Guide](docs/CONFIGURATION.md)** - Panduan konfigurasi lanjutan
+- **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** - Menyelesaikan masalah umum
+
+### 📖 Quick Links
+
+**Getting Started:**
+- [Installation & Setup](docs/QUICKSTART.md#installation)
+- [Basic Setup](docs/QUICKSTART.md#basic-setup)
+- [Your First Transaction](docs/QUICKSTART.md#your-first-transaction)
+
+**Core Concepts:**
+- [Authentication](docs/CONCEPTS.md#authentication)
+- [Webhooks vs API](docs/CONCEPTS.md#webhooks-vs-api)
+- [Error Handling](docs/CONCEPTS.md#error-handling)
+- [Test Mode](docs/CONCEPTS.md#test-mode)
+
+**Examples:**
+- [Transaction Examples](docs/EXAMPLES.md#transaction-examples)
+- [User Sync Examples](docs/EXAMPLES.md#user-sync-examples)
+- [Voucher Validation Examples](docs/EXAMPLES.md#voucher-validation-examples)
+- [Error Handling Examples](docs/EXAMPLES.md#error-handling-examples)
+
+**API Reference:**
+- [HAVNClient](docs/API_REFERENCE.md#havnclient)
+- [TransactionWebhook](docs/API_REFERENCE.md#transactionwebhook)
+- [UserSyncWebhook](docs/API_REFERENCE.md#usersyncwebhook)
+- [VoucherWebhook](docs/API_REFERENCE.md#voucherwebhook)
+- [Models](docs/API_REFERENCE.md#models)
+- [Exceptions](docs/API_REFERENCE.md#exceptions)
+
+**Configuration:**
+- [Environment Variables](docs/CONFIGURATION.md#environment-variables)
+- [Custom Configuration](docs/CONFIGURATION.md#programmatic-configuration)
+- [Multi-Environment Setup](docs/CONFIGURATION.md#multi-environment-setup)
+
+**Troubleshooting:**
+- [Common Errors](docs/TROUBLESHOOTING.md#common-errors)
+- [Authentication Issues](docs/TROUBLESHOOTING.md#authentication-issues)
+- [Network Issues](docs/TROUBLESHOOTING.md#network-issues)
+- [Debugging Tips](docs/TROUBLESHOOTING.md#debugging-tips)
+
+### 🚀 Quick Reference
+
+**Client Methods:**
 - `client.transactions.send(**kwargs)` - Send transaction
 - `client.users.sync(**kwargs)` - Sync user data
 - `client.vouchers.validate(**kwargs)` - Validate voucher
 
-### Models
+**Response Models:**
+- `TransactionResponse` - Transaction webhook response dengan commissions
+- `UserSyncResponse` - User sync webhook response dengan user dan associate data
+- Voucher validation mengembalikan `bool` (True jika valid)
 
-All responses are returned as Pydantic models with full type hints:
-
-- `TransactionResponse` - Transaction webhook response
-- `UserSyncResponse` - User sync webhook response
-- `VoucherValidationResponse` - Voucher validation response
-
-See [API Documentation](docs/API.md) for complete reference.
+Lihat [API Reference](docs/API_REFERENCE.md) untuk dokumentasi lengkap.
 
 ## Development
 
@@ -266,11 +313,31 @@ Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md)
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Support
+## Support & Resources
 
-- 📧 Email: support@havn.com
-- 📖 Documentation: https://docs.havn.com
-- 🐛 Issues: https://github.com/havn/havn-python-sdk/issues
+### 📚 Documentation
+
+- **Local Documentation**: Check folder `docs/` untuk dokumentasi lengkap
+- **Quick Start**: [docs/QUICKSTART.md](docs/QUICKSTART.md)
+- **API Reference**: [docs/API_REFERENCE.md](docs/API_REFERENCE.md)
+- **Examples**: [docs/EXAMPLES.md](docs/EXAMPLES.md)
+- **Troubleshooting**: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
+
+### 💬 Get Help
+
+- 📧 **Email**: support@havn.com
+- 📖 **Documentation**: https://docs.havn.com
+- 🐛 **GitHub Issues**: https://github.com/havn/havn-python-sdk/issues
+- 💻 **Examples**: Check folder `examples/` untuk contoh code yang bisa di-run
+
+### 🆘 Common Issues
+
+Jika mengalami masalah, lihat [Troubleshooting Guide](docs/TROUBLESHOOTING.md) untuk:
+- Authentication errors
+- Network issues
+- Validation errors
+- API errors
+- Debugging tips
 
 ## Changelog
 

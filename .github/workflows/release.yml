@@ -1,4 +1,7 @@
-name: Create Release
+name: Create Release (Fallback)
+
+# This workflow is a fallback for manual tag creation
+# Auto version bump is handled by version-bump.yml workflow
 
 on:
   push:
@@ -10,8 +13,10 @@ permissions:
 
 jobs:
   release:
-    name: Create GitHub Release
+    name: Create GitHub Release from Tag
     runs-on: ubuntu-latest
+    # Skip if release already exists (version-bump.yml already created it)
+    if: "!contains(github.event.head_commit.message, 'chore: bump version')"
     
     steps:
       - name: Checkout code
@@ -23,17 +28,37 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
       
+      - name: Check if release exists
+        id: check_release
+        run: |
+          TAG="v${{ steps.get_version.outputs.VERSION }}"
+          # Use API to check if release exists
+          if curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG" \
+            | grep -q '"id"'; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release $TAG already exists, skipping"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
       - name: Extract changelog
+        if: steps.check_release.outputs.exists == 'false'
         id: changelog
         run: |
           VERSION=${{ steps.get_version.outputs.VERSION }}
           # Extract changelog for this version
-          sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d' > release_notes.md
+          if [ -f CHANGELOG.md ]; then
+            sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d' > release_notes.md
+          fi
           if [ ! -s release_notes.md ]; then
             echo "Release $VERSION" > release_notes.md
           fi
       
       - name: Create Release
+        if: steps.check_release.outputs.exists == 'false'
         uses: softprops/action-gh-release@v1
         with:
           name: Release v${{ steps.get_version.outputs.VERSION }}

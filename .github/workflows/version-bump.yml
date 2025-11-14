@@ -1,0 +1,213 @@
+name: Auto Version Bump & Release
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - '.github/**'
+      - 'docs/**'
+      - 'examples/**'
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  version-bump:
+    name: Bump Version & Create Release
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip version]')"
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Get current version
+        id: current_version
+        run: |
+          # Try Python regex first, fallback to sed
+          if command -v python3 &> /dev/null; then
+            CURRENT_VERSION=$(python3 -c "import re; content=open('havn/__init__.py').read(); match=re.search(r'__version__ = [\"\047]([^\"\047]+)[\"\047]', content); print(match.group(1) if match else '0.0.0')")
+          else
+            CURRENT_VERSION=$(grep "__version__ = " havn/__init__.py | sed -E "s/.*__version__ = [\"']([^\"']+)[\"'].*/\\1/" || echo "0.0.0")
+          fi
+          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+      
+      - name: Determine version bump type
+        id: bump_type
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            BUMP_TYPE="${{ github.event.inputs.version_bump }}"
+          else
+            # Auto-detect dari commit message
+            COMMIT_MSG="${{ github.event.head_commit.message }}"
+            if echo "$COMMIT_MSG" | grep -qE "^(feat|feature)(\(.+\))?:"; then
+              BUMP_TYPE="minor"
+            elif echo "$COMMIT_MSG" | grep -qE "^(fix|bugfix)(\(.+\))?:"; then
+              BUMP_TYPE="patch"
+            elif echo "$COMMIT_MSG" | grep -qE "^(break|breaking)(\(.+\))?:"; then
+              BUMP_TYPE="major"
+            else
+              BUMP_TYPE="patch"  # Default to patch
+            fi
+          fi
+          echo "type=$BUMP_TYPE" >> $GITHUB_OUTPUT
+          echo "Bump type: $BUMP_TYPE"
+      
+      - name: Calculate new version
+        id: new_version
+        run: |
+          CURRENT="${{ steps.current_version.outputs.version }}"
+          BUMP_TYPE="${{ steps.bump_type.outputs.type }}"
+          
+          IFS='.' read -ra VERSION_PARTS <<< "$CURRENT"
+          MAJOR="${VERSION_PARTS[0]}"
+          MINOR="${VERSION_PARTS[1]}"
+          PATCH="${VERSION_PARTS[2]}"
+          
+          case "$BUMP_TYPE" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+          
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $NEW_VERSION"
+      
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          TAG="v${{ steps.new_version.outputs.version }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag $TAG already exists, skipping version bump"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Update version in setup.py
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          NEW_VERSION="${{ steps.new_version.outputs.version }}"
+          # GitHub Actions runs on Linux, so use standard sed
+          sed -i "s/version=\"[^\"]*\"/version=\"$NEW_VERSION\"/" setup.py
+          echo "Updated setup.py to version $NEW_VERSION"
+      
+      - name: Update version in havn/__init__.py
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          NEW_VERSION="${{ steps.new_version.outputs.version }}"
+          # GitHub Actions runs on Linux, so use standard sed
+          sed -i "s/__version__ = \"[^\"]*\"/__version__ = \"$NEW_VERSION\"/" havn/__init__.py
+          echo "Updated havn/__init__.py to version $NEW_VERSION"
+      
+      - name: Update CHANGELOG.md
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          NEW_VERSION="${{ steps.new_version.outputs.version }}"
+          TODAY=$(date +%Y-%m-%d)
+          
+          # Create new changelog entry
+          cat > /tmp/changelog_entry.txt <<EOF
+          ## [$NEW_VERSION] - $TODAY
+          
+          ### Changed
+          - Auto-bumped version to $NEW_VERSION
+          
+          EOF
+          
+          # Insert after "## [Unreleased]" line
+          if [ -f CHANGELOG.md ]; then
+            # GitHub Actions runs on Linux, so use standard sed
+            sed -i "/## \[Unreleased\]/r /tmp/changelog_entry.txt" CHANGELOG.md
+          fi
+      
+      - name: Commit version bump
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add setup.py havn/__init__.py CHANGELOG.md
+          git commit -m "chore: bump version to ${{ steps.new_version.outputs.version }} [skip ci]" || exit 0
+          git push origin main
+      
+      - name: Create tag
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          TAG="v${{ steps.new_version.outputs.version }}"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+          echo "Created tag: $TAG"
+      
+      - name: Extract changelog
+        if: steps.check_tag.outputs.exists == 'false'
+        id: changelog
+        run: |
+          VERSION="${{ steps.new_version.outputs.version }}"
+          if [ -f CHANGELOG.md ]; then
+            # Extract changelog for this version
+            sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d' > release_notes.md
+            if [ ! -s release_notes.md ]; then
+              echo "Release v$VERSION" > release_notes.md
+            fi
+          else
+            echo "Release v$VERSION" > release_notes.md
+          fi
+      
+      - name: Create GitHub Release
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.new_version.outputs.version }}
+          name: Release v${{ steps.new_version.outputs.version }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Summary
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          echo "### ✅ Version Bumped & Release Created!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Previous Version**: \`${{ steps.current_version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**New Version**: \`${{ steps.new_version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Bump Type**: \`${{ steps.bump_type.outputs.type }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag**: \`v${{ steps.new_version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Release akan otomatis trigger publish workflow ke PyPI." >> $GITHUB_STEP_SUMMARY
+

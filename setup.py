@@ -17,7 +17,7 @@ if requirements_path.exists():
 
 setup(
     name="havn-sdk",
-    version="1.0.0",
+    version="1.0.1",
     author="HAVN Team",
     author_email="support@havn.com",
     description="Official Python SDK for HAVN (Hierarchical Associate Voucher Network) API",

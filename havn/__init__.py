@@ -21,8 +21,8 @@ from .models import (
 )
 
 __version__ = "1.0.2"
-__author__ = "HAVN Team"
-__email__ = "support@havn.com"
+__author__ = "Bagus"
+__email__ = "bagus@intelove.com"
 
 __all__ = [
     "HAVNClient",

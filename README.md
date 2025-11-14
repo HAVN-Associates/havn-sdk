@@ -325,7 +325,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### 💬 Get Help
 
-- 📧 **Email**: support@havn.com
+- 📧 **Email**: bagus@intelove.com
 - 📖 **Documentation**: https://docs.havn.com
 - 🐛 **GitHub Issues**: https://github.com/havn/havn-python-sdk/issues
 - 💻 **Examples**: Check folder `examples/` untuk contoh code yang bisa di-run

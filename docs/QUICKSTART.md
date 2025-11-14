@@ -256,6 +256,6 @@ Setelah menguasai dasar-dasar:
 
 Jika ada pertanyaan:
 
-- 📧 Email: support@havn.com
+- 📧 Email: bagus@intelove.com
 - 📖 Docs: https://docs.havn.com
 - 🐛 Issues: https://github.com/havn/havn-python-sdk/issues

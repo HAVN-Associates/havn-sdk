@@ -76,5 +76,5 @@ Follow conventional commits:
 
 ## Questions?
 
-- 📧 Email: dev@havn.com
+- 📧 Email: bagus@intelove.com
 - 💬 Discussions: https://github.com/havn/havn-python-sdk/discussions

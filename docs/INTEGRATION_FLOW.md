@@ -188,12 +188,12 @@ client = HAVNClient(
     webhook_secret=os.getenv('HAVN_WEBHOOK_SECRET')
 )
 
-# Sync user ke HAVN
+# Sync user ke HAVN dengan role "owner"
 result = client.users.sync(
     email="owner@shopeasy.com",
     name="John Doe",
-    upline_code=project.upline_referral_code,  # "HAVN-MJ-001" jika ada
-    project_id=str(project.id)
+    is_owner=True,  # Set role sebagai "owner"
+    upline_code=project.upline_referral_code  # "HAVN-MJ-001" jika ada
 )
 
 # HAVN return referral_code
@@ -224,17 +224,17 @@ try:
     result = client.users.sync(
         email="owner@shopeasy.com",
         name="John Doe",
-        upline_code=project.upline_referral_code,
-        project_id=str(project.id)
+        is_owner=True,  # Set role sebagai "owner"
+        upline_code=project.upline_referral_code
     )
     project.referral_code = result.referral_code
     project.save()
-    
+
 except HAVNError as e:
     print(f"HAVN API Error: {e.message}")
     print(f"Status Code: {e.status_code}")
     # Handle error: retry, log, notify admin, etc.
-    
+
 except Exception as e:
     print(f"Unexpected error: {e}")
 ```
@@ -248,10 +248,11 @@ from havn import HAVNClient
 
 client = HAVNClient(api_key="...", webhook_secret="...")
 
-# Step 1: Sync project owner (create associate baru)
+# Step 1: Sync project owner (create associate baru dengan role "owner")
 owner_result = client.users.sync(
     email="owner@shopeasy.com",
     name="John Doe",
+    is_owner=True,  # Set role sebagai "owner"
     upline_code=project.upline_referral_code,
     create_associate=True
 )
@@ -260,20 +261,22 @@ owner_result = client.users.sync(
 project.referral_code = owner_result.associate.referral_code if owner_result.associate else None
 project.save()
 
-# Step 2: Sync team members ke associate yang sama (bulk)
+# Step 2: Sync team members ke associate yang sama (bulk) dengan role "partner"
 if project.referral_code:
     team_members = [
         {"email": "admin@shopeasy.com", "name": "Jane Smith"},
         {"email": "manager@shopeasy.com", "name": "Bob Johnson"},
         {"email": "support@shopeasy.com", "name": "Alice Brown"},
     ]
-    
+
     team_result = client.users.sync_bulk(
         users=team_members,
-        referral_code=project.referral_code  # Link semua ke associate project
+        referral_code=project.referral_code,  # Link semua ke associate project
+        is_owner=False  # Semua team members jadi "partner" (default)
     )
-    
+
     print(f"Team members synced: {team_result.summary.success}/{team_result.summary.total}")
+    # Owner punya role "owner", team members punya role "partner"
     if team_result.errors:
         print(f"Errors: {len(team_result.errors)}")
         for error in team_result.errors:
@@ -287,8 +290,8 @@ Untuk project dengan banyak users (>50), gunakan batch processing:
 ```python
 # Batch pertama - sync owner dan initial team
 batch1_users = [
-    {"email": "owner@shopeasy.com", "name": "John Doe"},
-    {"email": "admin@shopeasy.com", "name": "Jane Smith"},
+    {"email": "owner@shopeasy.com", "name": "John Doe", "is_owner": True},  # Owner
+    {"email": "admin@shopeasy.com", "name": "Jane Smith"},  # Partner
     # ... max 50 users
 ]
 
@@ -308,12 +311,12 @@ if project.referral_code:
         {"email": "user52@shopeasy.com", "name": "User 52"},
         # ... max 50 users
     ]
-    
+
     batch2_result = client.users.sync_bulk(
         users=batch2_users,
         referral_code=project.referral_code  # Link ke associate dari batch 1
     )
-    
+
     print(f"Batch 2: {batch2_result.summary.success} users linked")
 ```
 
@@ -326,6 +329,9 @@ if project.referral_code:
 - ✅ **Multiple users bisa di-link ke associate yang sama** menggunakan `referral_code`
 - ✅ **Bulk sync** mendukung max 50 users per batch (configurable via `USER_SYNC_BULK_MAX_SIZE`)
 - ✅ **Batch processing** bisa digunakan untuk sync banyak users dengan referral_code dari batch sebelumnya
+- ✅ **`is_owner` flag** untuk set role "owner" (default: "partner") - berguna untuk project owner
+- ✅ **Rate limiting** aktif untuk semua endpoints dengan per-endpoint limits (lihat Troubleshooting section)
+- ✅ **`HAVNRateLimitError`** exception untuk proper rate limit handling dengan detailed info (retry_after, limit, remaining)
 
 ---
 
@@ -358,7 +364,7 @@ def process_payment(payment):
         try:
             # Ambil upline_referral_code dari project
             upline_code = payment.project.upline_referral_code
-            
+
             # Kirim transaction ke HAVN menggunakan SDK
             result = client.transactions.send(
                 amount=payment.amount_cents,  # $1000.00 = 100000 cents
@@ -373,17 +379,17 @@ def process_payment(payment):
                     'payment_method': payment.payment_method,
                 }
             )
-            
+
             # Simpan transaction ID untuk reference
             payment.havn_transaction_id = result.transaction.transaction_id
             payment.havn_synced = True
             payment.save()
-            
+
             print(f"Transaction sent: {result.transaction.transaction_id}")
             print(f"Commission distributed: {result.commission_distributed}")
-            
+
             return result
-            
+
         except HAVNError as e:
             # Log error but don't block payment
             print(f"HAVN integration error: {e.message}")
@@ -405,10 +411,29 @@ for commission in result.commissions:
     print(f"Level {commission.level}: ${commission.amount / 100:.2f} ({commission.percentage}%)")
 ```
 
+**Catatan Penting:**
+
+- ✅ **Currency Conversion** - SDK dapat auto-convert non-USD amounts ke USD cents (backend akan verify dengan exact match)
+- ✅ **Backend Verification** - Backend selalu verify conversion dengan recalculate server-side (security requirement)
+- ✅ **Exact Match Required** - Amount harus match exact (no tolerance) dengan backend calculation
+- ✅ **Transaction Failed** - Jika conversion mismatch, transaction akan di-mark sebagai `FAILED`
+- ✅ **Server Authoritative** - Server exchange rate digunakan untuk final calculation
+- ✅ **Audit Trail** - Original amounts dan exchange rates disimpan di `custom_fields` untuk audit
+- ✅ **HAVN vs Local Vouchers** - Hanya HAVN vouchers (code starts with "HAVN-") yang dikirim ke transaction API
+- ✅ **Local Vouchers** - Local vouchers tidak dikirim ke transaction API, hanya `referral_code` yang dikirim
+
 **Transaction dengan Voucher:**
 
 ```python
-# Transaction dengan kode voucher
+# Transaction dengan HAVN voucher (both referral_code dan promo_code sent)
+result = client.transactions.send(
+    amount=80000,  # $800.00 (setelah diskon)
+    referral_code="HAVN-MJ-001",
+    promo_code="HAVN-AQNEO-S08-ABC123",  # HAVN voucher - akan dikirim
+    currency="USD"
+)
+
+# Transaction dengan local voucher (hanya referral_code sent)
 result = client.transactions.send(
     amount=80000,  # $800.00 (setelah diskon)
     subtotal_transaction=100000,  # $1000.00 (sebelum diskon)
@@ -440,6 +465,14 @@ result = client.transactions.send(
 - ✅ Jika tidak ada upline (`upline_referral_code` null), commission masuk ke platform revenue
 - ✅ Transaction harus dikirim setelah payment confirmed/success
 - ✅ SDK akan handle HMAC signature dan retry logic secara otomatis
+- ✅ **Currency Conversion** - SDK dapat auto-convert non-USD amounts ke USD cents (backend akan verify dengan exact match)
+- ✅ **Backend Verification** - Backend selalu verify conversion dengan recalculate server-side (security requirement)
+- ✅ **Exact Match Required** - Amount harus match exact (no tolerance) dengan backend calculation
+- ✅ **Transaction Failed** - Jika conversion mismatch, transaction akan di-mark sebagai `FAILED`
+- ✅ **Server Authoritative** - Server exchange rate digunakan untuk final calculation
+- ✅ **Audit Trail** - Original amounts dan exchange rates disimpan di `custom_fields` untuk audit
+- ✅ **HAVN vs Local Vouchers** - Hanya HAVN vouchers (code starts with "HAVN-") yang dikirim ke transaction API
+- ✅ **Local Vouchers** - Local vouchers tidak dikirim ke transaction API, hanya `referral_code` yang dikirim
 
 **Mengapa Menggunakan Upline Referral Code?**
 
@@ -501,17 +534,17 @@ try:
     result = client.users.sync(
         email=owner_b.email,
         name=owner_b.name,
-        upline_code=project_b.upline_referral_code,  # "HAVN-A-001"
-        project_id=str(project_b.id)
+        is_owner=True,  # Set role sebagai "owner"
+        upline_code=project_b.upline_referral_code  # "HAVN-A-001"
     )
-    
+
     # HAVN return referral_code untuk Project B
     project_b.referral_code = result.referral_code  # "HAVN-B-002"
     project_b.save()
-    
+
     print(f"Project B referral_code: {project_b.referral_code}")
     print(f"Project B upline: {project_b.upline_referral_code}")
-    
+
 except HAVNError as e:
     print(f"Error syncing Project B: {e.message}")
 
@@ -605,7 +638,7 @@ class HAVNService:
             api_key=os.getenv('HAVN_API_KEY'),
             webhook_secret=os.getenv('HAVN_WEBHOOK_SECRET')
         )
-    
+
     def sync_project_user(self, project, owner_email, owner_name):
         """
         Step 2: Sync project owner ke HAVN dan dapatkan referral_code
@@ -614,32 +647,32 @@ class HAVNService:
             result = self.client.users.sync(
                 email=owner_email,
                 name=owner_name,
-                upline_code=project.upline_referral_code,
-                project_id=str(project.id)
+                is_owner=True,  # Set role sebagai "owner"
+                upline_code=project.upline_referral_code
             )
-            
+
             # Simpan referral_code ke project
             project.referral_code = result.referral_code
             project.save()
-            
+
             logger.info(f"Project {project.id} synced with referral_code: {result.referral_code}")
             return result
-            
+
         except HAVNError as e:
             logger.error(f"HAVN sync error for project {project.id}: {e.message}")
             raise
-    
+
     def send_transaction(self, payment):
         """
         Step 3: Kirim transaction ke HAVN saat payment berhasil
         """
         if payment.status != 'completed':
             raise ValueError("Payment must be completed before sending to HAVN")
-        
+
         try:
             # Ambil upline_referral_code dari project
             upline_code = payment.project.upline_referral_code
-            
+
             result = self.client.transactions.send(
                 amount=payment.amount_cents,
                 currency=payment.currency,
@@ -653,14 +686,14 @@ class HAVNService:
                     'project_id': str(payment.project.id),
                 }
             )
-            
+
             # Simpan transaction ID
             payment.havn_transaction_id = result.transaction.transaction_id
             payment.save()
-            
+
             logger.info(f"Transaction sent to HAVN: {result.transaction.transaction_id}")
             return result
-            
+
         except HAVNError as e:
             logger.error(f"HAVN transaction error for payment {payment.id}: {e.message}")
             # Don't raise - log error but don't block payment
@@ -690,10 +723,10 @@ def create_project(project_name, upline_referral_code=None):
 # ============================================
 def sync_project_to_havn(project_id, owner_email, owner_name):
     project = Project.objects.get(id=project_id)
-    
-    # Sync user ke HAVN
+
+    # Sync user ke HAVN dengan role "owner"
     result = havn_service.sync_project_user(project, owner_email, owner_name)
-    
+
     # project.referral_code sudah di-update di havn_service
     return project
 
@@ -702,16 +735,16 @@ def sync_project_to_havn(project_id, owner_email, owner_name):
 # ============================================
 def process_payment(payment_id):
     payment = Payment.objects.get(id=payment_id)
-    
+
     if payment.status == 'completed':
         # Kirim ke HAVN
         havn_result = havn_service.send_transaction(payment)
-        
+
         if havn_result:
             print(f"Transaction sent: {havn_result.transaction.transaction_id}")
         else:
             print("Failed to send transaction to HAVN (check logs)")
-    
+
     return payment
 
 # ============================================
@@ -719,16 +752,16 @@ def process_payment(payment_id):
 # ============================================
 def refer_new_project(existing_project_id, new_project_name, new_owner_email, new_owner_name):
     existing_project = Project.objects.get(id=existing_project_id)
-    
+
     # Buat project baru dengan upline_referral_code
     new_project = Project.objects.create(
         project_name=new_project_name,
         upline_referral_code=existing_project.referral_code
     )
-    
+
     # Sync new project user
     result = havn_service.sync_project_user(new_project, new_owner_email, new_owner_name)
-    
+
     return new_project
 ```
 
@@ -759,14 +792,14 @@ payments_db = {}
 def create_project():
     data = request.json
     project_id = len(projects_db) + 1
-    
+
     project = {
         'id': project_id,
         'project_name': data['project_name'],
         'upline_referral_code': data.get('upline_referral_code'),
         'referral_code': None  # Belum ada
     }
-    
+
     projects_db[project_id] = project
     return jsonify(project), 201
 
@@ -778,9 +811,9 @@ def sync_project(project_id):
     project = projects_db.get(project_id)
     if not project:
         return jsonify({'error': 'Project not found'}), 404
-    
+
     data = request.json
-    
+
     try:
         result = havn_client.users.sync(
             email=data['email'],
@@ -788,16 +821,16 @@ def sync_project(project_id):
             upline_code=project['upline_referral_code'],
             project_id=str(project_id)
         )
-        
+
         # Update project dengan referral_code
         project['referral_code'] = result.referral_code
         projects_db[project_id] = project
-        
+
         return jsonify({
             'success': True,
             'referral_code': result.referral_code
         })
-        
+
     except HAVNError as e:
         return jsonify({'error': e.message}), 400
 
@@ -809,11 +842,11 @@ def create_payment():
     data = request.json
     payment_id = len(payments_db) + 1
     project_id = data['project_id']
-    
+
     project = projects_db.get(project_id)
     if not project:
         return jsonify({'error': 'Project not found'}), 404
-    
+
     payment = {
         'id': payment_id,
         'project_id': project_id,
@@ -822,9 +855,9 @@ def create_payment():
         'status': data.get('status', 'pending'),
         'havn_transaction_id': None
     }
-    
+
     payments_db[payment_id] = payment
-    
+
     # Jika payment completed, kirim ke HAVN
     if payment['status'] == 'completed':
         try:
@@ -836,14 +869,14 @@ def create_payment():
                 referral_code=project['upline_referral_code'],  # Gunakan upline!
                 transaction_type="NEW_CUSTOMER"
             )
-            
+
             payment['havn_transaction_id'] = result.transaction.transaction_id
             payments_db[payment_id] = payment
-            
+
         except HAVNError as e:
             # Log error but don't block
             print(f"HAVN error: {e.message}")
-    
+
     return jsonify(payment), 201
 
 if __name__ == '__main__':
@@ -873,14 +906,15 @@ def safe_sync_user(client, email, name, upline_code, project_id):
                 project_id=project_id
             )
             return result
-            
+
+        except HAVNRateLimitError as e:
+            # Rate limit exceeded dengan detailed info
+            wait_time = e.retry_after or (2 ** attempt)
+            time.sleep(wait_time)
+            continue
         except HAVNError as e:
-            if e.status_code == 429:  # Rate limit
-                time.sleep(2 ** attempt)  # Exponential backoff
-                continue
-            else:
-                logger.error(f"HAVN sync error: {e.message}")
-                raise
+            logger.error(f"HAVN sync error: {e.message}")
+            raise
 ```
 
 ### 2. Async Processing
@@ -911,12 +945,12 @@ logger = logging.getLogger('havn_integration')
 
 def send_transaction_with_logging(client, payment):
     logger.info(f"Attempting to send payment {payment.id} to HAVN")
-    
+
     try:
         result = client.transactions.send(...)
         logger.info(f"Transaction {result.transaction.transaction_id} sent successfully")
         return result
-        
+
     except HAVNError as e:
         logger.error(f"HAVN error for payment {payment.id}: {e.message}")
         raise
@@ -948,6 +982,7 @@ if payment.project.upline_referral_code:
 **Problem:** `referral_code` tetap `null` setelah user sync.
 
 **Solution:**
+
 - Pastikan API key dan webhook secret valid
 - Check error response dari HAVN
 - Pastikan user data (email, name) valid
@@ -967,6 +1002,7 @@ except HAVNError as e:
 **Problem:** Transaction terkirim tapi commission tidak didistribusikan.
 
 **Solution:**
+
 - Pastikan menggunakan `upline_referral_code` sebagai `referral_code` di transaction
 - Pastikan upline project valid dan active
 - Check commission distribution status di response
@@ -981,25 +1017,42 @@ print(f"Commission distributed: {result.commission_distributed}")
 **Problem:** Mendapatkan 429 (Rate Limit) error.
 
 **Solution:**
+
+- Use `HAVNRateLimitError` untuk proper handling dengan detailed info
 - Implement exponential backoff
 - Use async processing
-- Batch requests jika memungkinkan
+- Batch requests jika memungkinkan (gunakan bulk sync)
+- Monitor rate limit headers
 
 ```python
+from havn import HAVNRateLimitError
 import time
-import random
 
 def send_with_backoff(client, max_retries=3):
     for attempt in range(max_retries):
         try:
             return client.transactions.send(...)
+        except HAVNRateLimitError as e:
+            # Rate limit exceeded dengan detailed info
+            print(f"Rate limit exceeded. Retry after {e.retry_after} seconds")
+            print(f"Limit: {e.limit}, Remaining: {e.remaining}")
+
+            # Wait sesuai retry_after atau use exponential backoff
+            wait_time = e.retry_after or (2 ** attempt)
+            time.sleep(wait_time)
+            continue
         except HAVNError as e:
-            if e.status_code == 429:
-                wait_time = (2 ** attempt) + random.uniform(0, 1)
-                time.sleep(wait_time)
-                continue
+            # Other HAVN errors
             raise
 ```
+
+**Best Practices:**
+
+- Gunakan bulk sync untuk mengurangi jumlah requests
+- Monitor rate limit headers (X-RateLimit-\*) di setiap response
+- Implement proper retry logic dengan exponential backoff
+
+````
 
 ### Issue: Invalid Signature Error
 
@@ -1014,10 +1067,9 @@ def send_with_backoff(client, max_retries=3):
 # Verify credentials
 print(f"API Key: {os.getenv('HAVN_API_KEY')[:10]}...")
 print(f"Secret: {os.getenv('HAVN_WEBHOOK_SECRET')[:10]}...")
-```
+````
 
 ---
 
 **Last Updated:** 2024  
 **SDK Version:** 1.0.0
-

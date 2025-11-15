@@ -58,3 +58,25 @@ class HAVNNetworkError(HAVNError):
         if self.original_error:
             return f"HAVNNetworkError: {self.message}. Original: {str(self.original_error)}"
         return f"HAVNNetworkError: {self.message}"
+
+
+class HAVNRateLimitError(HAVNError):
+    """Exception raised when rate limit is exceeded"""
+
+    def __init__(
+        self,
+        message: str,
+        retry_after: int = None,
+        limit: int = None,
+        remaining: int = None,
+    ):
+        self.message = message
+        self.retry_after = retry_after  # Seconds until rate limit resets
+        self.limit = limit  # Total requests allowed per window
+        self.remaining = remaining  # Remaining requests in current window
+        super().__init__(self.message)
+
+    def __str__(self):
+        if self.retry_after:
+            return f"HAVNRateLimitError: {self.message}. Retry after {self.retry_after} seconds"
+        return f"HAVNRateLimitError: {self.message}"

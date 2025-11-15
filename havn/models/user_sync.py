@@ -21,6 +21,7 @@ class UserSyncPayload:
         referral_code: Referral code for associate creation (optional)
         country_code: Country code (optional)
         create_associate: Whether to create associate (default: True)
+        is_owner: Set role sebagai "owner" instead of "partner" (default: False)
 
     Example:
         >>> payload = UserSyncPayload(
@@ -40,6 +41,7 @@ class UserSyncPayload:
     referral_code: Optional[str] = None
     country_code: Optional[str] = None
     create_associate: bool = True
+    is_owner: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary, removing None values"""
@@ -188,6 +190,7 @@ class BulkUserSyncPayload:
         upline_code: Shared upline referral code (optional)
         referral_code: Shared referral code for linking to existing associate (optional)
         create_associate: Shared flag for associate creation (optional)
+        is_owner: Shared flag untuk set role sebagai "owner" (optional, default: False)
 
     Example:
         >>> payload = BulkUserSyncPayload(
@@ -204,6 +207,7 @@ class BulkUserSyncPayload:
     upline_code: Optional[str] = None
     referral_code: Optional[str] = None
     create_associate: Optional[bool] = None
+    is_owner: Optional[bool] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary, removing None values"""
@@ -214,6 +218,8 @@ class BulkUserSyncPayload:
             result["referral_code"] = self.referral_code
         if self.create_associate is not None:
             result["create_associate"] = self.create_associate
+        if self.is_owner is not None:
+            result["is_owner"] = self.is_owner
         return result
 
     def validate(self) -> None:
@@ -273,9 +279,19 @@ class BulkUserSyncPayload:
                         f"User at index {idx}: country code must be uppercase"
                     )
 
+            # Validate is_owner per-user
+            if "is_owner" in user:
+                if not isinstance(user.get("is_owner"), bool):
+                    raise ValueError(f"User at index {idx}: is_owner must be boolean")
+
         # Validate shared fields
         validate_referral_code(self.upline_code)
         validate_referral_code(self.referral_code)
+
+        # Validate shared is_owner
+        if self.is_owner is not None:
+            if not isinstance(self.is_owner, bool):
+                raise ValueError("is_owner must be boolean")
 
 
 @dataclass

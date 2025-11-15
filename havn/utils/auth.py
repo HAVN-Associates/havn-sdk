@@ -5,7 +5,7 @@ Authentication utilities for HAVN SDK
 import hmac
 import hashlib
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 
 def calculate_hmac_signature(payload: Dict[str, Any], secret: str) -> str:
@@ -35,13 +35,18 @@ def calculate_hmac_signature(payload: Dict[str, Any], secret: str) -> str:
 
 
 def build_auth_headers(
-    payload: Dict[str, Any], api_key: str, webhook_secret: str
+    payload: Optional[Dict[str, Any]] = None,
+    api_key: str = None,
+    webhook_secret: str = None,
 ) -> Dict[str, str]:
     """
     Build authentication headers for API request
 
+    For GET requests without payload, signature is calculated from empty dict.
+    For POST requests with payload, signature is calculated from payload.
+
     Args:
-        payload: Request payload
+        payload: Request payload (optional, for GET requests can be None)
         api_key: API key
         webhook_secret: Webhook secret for signature
 
@@ -49,6 +54,7 @@ def build_auth_headers(
         Dictionary of headers
 
     Example:
+        >>> # POST request with payload
         >>> headers = build_auth_headers(
         ...     payload={"amount": 10000},
         ...     api_key="key123",
@@ -56,8 +62,17 @@ def build_auth_headers(
         ... )
         >>> headers["X-API-Key"]
         'key123'
+
+        >>> # GET request without payload
+        >>> headers = build_auth_headers(
+        ...     api_key="key123",
+        ...     webhook_secret="secret456"
+        ... )
     """
-    signature = calculate_hmac_signature(payload, webhook_secret)
+    # For GET requests, use empty dict for signature calculation
+    # (matches backend behavior where request.get_data() returns empty bytes)
+    signature_payload = payload if payload is not None else {}
+    signature = calculate_hmac_signature(signature_payload, webhook_secret)
 
     return {
         "Content-Type": "application/json",

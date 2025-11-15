@@ -48,6 +48,7 @@ class UserSyncWebhook:
         referral_code: Optional[str] = None,
         country_code: Optional[str] = None,
         create_associate: bool = True,
+        is_owner: bool = False,
     ) -> UserSyncResponse:
         """
         Sync user data to HAVN API
@@ -62,6 +63,7 @@ class UserSyncWebhook:
             referral_code: Referral code for associate creation (optional)
             country_code: Country code (2 letters, ISO 3166-1 alpha-2) (optional)
             create_associate: Whether to create associate (default: True)
+            is_owner: Set role sebagai "owner" instead of "partner" (default: False)
 
         Returns:
             UserSyncResponse with user and associate data
@@ -77,7 +79,8 @@ class UserSyncWebhook:
             ...     google_id="google123",
             ...     picture="https://example.com/photo.jpg",
             ...     create_associate=True,
-            ...     upline_code="HAVN-MJ-001"
+            ...     upline_code="HAVN-MJ-001",
+            ...     is_owner=True
             ... )
             >>> print(f"User: {result.user.id}")
             >>> if result.associate:
@@ -94,6 +97,7 @@ class UserSyncWebhook:
             referral_code=referral_code,
             country_code=country_code,
             create_associate=create_associate,
+            is_owner=is_owner,
         )
 
         # Validate payload
@@ -118,6 +122,7 @@ class UserSyncWebhook:
         upline_code: Optional[str] = None,
         referral_code: Optional[str] = None,
         create_associate: Optional[bool] = None,
+        is_owner: Optional[bool] = None,
     ) -> BulkUserSyncResponse:
         """
         Sync multiple users to HAVN API (bulk sync)
@@ -127,6 +132,7 @@ class UserSyncWebhook:
             upline_code: Shared upline referral code (optional)
             referral_code: Shared referral code for linking to existing associate (optional)
             create_associate: Shared flag for associate creation (optional)
+            is_owner: Shared flag untuk set role sebagai "owner" (optional, default: False)
 
         Returns:
             BulkUserSyncResponse with results and summary
@@ -138,7 +144,7 @@ class UserSyncWebhook:
         Example:
             >>> result = client.users.sync_bulk(
             ...     users=[
-            ...         {"email": "user1@example.com", "name": "John Doe"},
+            ...         {"email": "user1@example.com", "name": "John Doe", "is_owner": True},
             ...         {"email": "user2@example.com", "name": "Jane Smith"},
             ...     ],
             ...     upline_code="HAVN-MJ-001",
@@ -153,6 +159,7 @@ class UserSyncWebhook:
             upline_code=upline_code,
             referral_code=referral_code,
             create_associate=create_associate,
+            is_owner=is_owner,
         )
 
         # Validate payload

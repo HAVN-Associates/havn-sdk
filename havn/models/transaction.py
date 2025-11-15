@@ -20,7 +20,7 @@ class TransactionPayload:
         currency: Currency code (default: USD)
         customer_type: NEW_CUSTOMER or RECURRING (default: NEW_CUSTOMER)
         subtotal_transaction: Original amount before discount (optional)
-        acquisition_method: REFERRAL or REFERRAL_VOUCHER (optional, auto-determined from promo_code/referral_code)
+        acquisition_method: REFERRAL or REFERRAL_VOUCHER (optional, auto-determined)<br>- REFERRAL_VOUCHER: Jika ada promo_code DAN referral_code (keduanya wajib)<br>- REFERRAL: Jika hanya ada referral_code (tanpa promo_code)
         custom_fields: Custom metadata dict (max 3 entries) (optional)
         invoice_id: External invoice ID (optional)
         transaction_type: Transaction type (optional, untuk logging)
@@ -44,7 +44,7 @@ class TransactionPayload:
     customer_type: str = "NEW_CUSTOMER"
     subtotal_transaction: Optional[int] = None
     acquisition_method: Optional[str] = (
-        None  # Optional: Auto-determined from promo_code/referral_code
+        None  # Optional: Auto-determined<br>- REFERRAL_VOUCHER: Jika ada promo_code DAN referral_code (keduanya wajib)<br>- REFERRAL: Jika hanya ada referral_code
     )
     custom_fields: Optional[Dict[str, Any]] = None
     invoice_id: Optional[str] = None

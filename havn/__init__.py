@@ -11,6 +11,7 @@ from .exceptions import (
     HAVNAuthError,
     HAVNValidationError,
     HAVNNetworkError,
+    HAVNRateLimitError,
 )
 from .models import (
     TransactionPayload,
@@ -21,6 +22,17 @@ from .models import (
     BulkUserSyncResponse,
     BulkSyncSummary,
     VoucherValidationPayload,
+    VoucherListFilters,
+    VoucherData,
+    VoucherListPagination,
+    VoucherListResponse,
+    is_havn_voucher_code,
+)
+from .utils.currency import (
+    CurrencyConverter,
+    convert_to_usd_cents,
+    convert_from_usd_cents,
+    get_exchange_rate,
 )
 
 __version__ = "1.0.3"
@@ -34,6 +46,7 @@ __all__ = [
     "HAVNAuthError",
     "HAVNValidationError",
     "HAVNNetworkError",
+    "HAVNRateLimitError",
     "TransactionPayload",
     "TransactionResponse",
     "UserSyncPayload",
@@ -42,4 +55,13 @@ __all__ = [
     "BulkUserSyncResponse",
     "BulkSyncSummary",
     "VoucherValidationPayload",
+    "VoucherListFilters",
+    "VoucherData",
+    "VoucherListPagination",
+    "VoucherListResponse",
+    "is_havn_voucher_code",
+    "CurrencyConverter",
+    "convert_to_usd_cents",
+    "convert_from_usd_cents",
+    "get_exchange_rate",
 ]

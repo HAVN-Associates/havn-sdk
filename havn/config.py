@@ -15,6 +15,11 @@ class Config:
     DEFAULT_MAX_RETRIES = 3
     DEFAULT_BACKOFF_FACTOR = 0.5  # seconds
 
+    # Currency exchange rate defaults
+    DEFAULT_EXCHANGE_RATE_API_URL = "https://api.exchangerate-api.com/v4/latest/USD"
+    DEFAULT_EXCHANGE_RATE_CACHE_DURATION_HOURS = 24  # Cache rates for 24 hours
+    DEFAULT_CURRENCY_API_TIMEOUT = 5  # API request timeout in seconds
+
     @staticmethod
     def get_api_key() -> Optional[str]:
         """Get API key from environment"""
@@ -55,3 +60,35 @@ class Config:
             )
         except (ValueError, TypeError):
             return Config.DEFAULT_BACKOFF_FACTOR
+
+    @staticmethod
+    def get_exchange_rate_api_url() -> Optional[str]:
+        """Get exchange rate API URL from environment"""
+        return os.getenv(
+            "HAVN_EXCHANGE_RATE_API_URL", Config.DEFAULT_EXCHANGE_RATE_API_URL
+        )
+
+    @staticmethod
+    def get_exchange_rate_cache_duration_hours() -> Optional[int]:
+        """Get exchange rate cache duration from environment"""
+        try:
+            return int(
+                os.getenv(
+                    "HAVN_EXCHANGE_RATE_CACHE_DURATION_HOURS",
+                    Config.DEFAULT_EXCHANGE_RATE_CACHE_DURATION_HOURS,
+                )
+            )
+        except (ValueError, TypeError):
+            return Config.DEFAULT_EXCHANGE_RATE_CACHE_DURATION_HOURS
+
+    @staticmethod
+    def get_currency_api_timeout() -> Optional[int]:
+        """Get currency API timeout from environment"""
+        try:
+            return int(
+                os.getenv(
+                    "HAVN_CURRENCY_API_TIMEOUT", Config.DEFAULT_CURRENCY_API_TIMEOUT
+                )
+            )
+        except (ValueError, TypeError):
+            return Config.DEFAULT_CURRENCY_API_TIMEOUT

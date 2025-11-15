@@ -126,6 +126,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated INTEGRATION_FLOW.md dengan bulk sync workflow, currency conversion, security notes, dan voucher handling
 - Updated README.md dengan rate limiting, bulk sync, voucher features (get_all, get_combined), dan currency conversion
 
+## [1.0.4] - 2025-11-15
+
+### Changed
+- Auto-bumped version to 1.0.4
+
 ## [1.0.3] - 2025-11-14
 
 ### Changed

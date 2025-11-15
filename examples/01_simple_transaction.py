@@ -25,8 +25,11 @@ def send_simple_transaction():
         # Send transaction
         result = client.transactions.send(
             amount=10000,  # $100.00 in cents
+            payment_gateway_transaction_id="stripe_1234567890",  # Required
+            customer_email="customer@example.com",  # Required
             referral_code="HAVN-MJ-001",  # Associate referral code
             currency="USD",
+            # acquisition_method akan auto-determined sebagai REFERRAL
         )
 
         # Access response data

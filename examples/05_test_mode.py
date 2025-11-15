@@ -20,6 +20,8 @@ def test_transaction_in_dry_run():
         # Send transaction (won't be saved to database)
         result = client.transactions.send(
             amount=10000,  # $100.00
+            payment_gateway_transaction_id="stripe_test_123",
+            customer_email="test@example.com",
             referral_code="HAVN-MJ-001",
             currency="USD",
             customer_type="NEW_CUSTOMER",

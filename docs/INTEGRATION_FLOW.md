@@ -370,9 +370,9 @@ def process_payment(payment):
                 amount=payment.amount_cents,  # $1000.00 = 100000 cents
                 currency=payment.currency,     # "USD"
                 invoice_id=payment.invoice_number,
-                customer_id=str(payment.customer_id),
+                customer_email=payment.customer_email,  # Required
                 referral_code=upline_code,  # Gunakan upline_referral_code!
-                transaction_type="NEW_CUSTOMER",  # atau "RECURRING"
+                transaction_type="SALE",  # untuk logging sale , subcrition, etc
                 promo_code=payment.voucher_code,  # Optional
                 custom_fields={
                     'order_id': str(payment.order_id),
@@ -451,9 +451,9 @@ result = client.transactions.send(
 result = client.transactions.send(
     amount=50000,  # $500.00 monthly
     currency="USD",
+    customer_type="RECURRING",
     referral_code=upline_code,
-    transaction_type="RECURRING",
-    is_recurring=True,
+    transaction_type="RECURRING",  # untuk logging
     description="Monthly subscription"
 )
 ```
@@ -677,9 +677,9 @@ class HAVNService:
                 amount=payment.amount_cents,
                 currency=payment.currency,
                 invoice_id=payment.invoice_number,
-                customer_id=str(payment.customer_id),
+                customer_email=payment.customer_email,  # Required
                 referral_code=upline_code,  # Gunakan upline!
-                transaction_type="NEW_CUSTOMER",
+                transaction_type="NEW_CUSTOMER",  # untuk logging
                 promo_code=getattr(payment, 'voucher_code', None),
                 custom_fields={
                     'payment_id': str(payment.id),
@@ -865,9 +865,9 @@ def create_payment():
                 amount=payment['amount_cents'],
                 currency=payment['currency'],
                 invoice_id=data.get('invoice_id'),
-                customer_id=str(data.get('customer_id')),
+                customer_email=data['customer_email'],  # Required
                 referral_code=project['upline_referral_code'],  # Gunakan upline!
-                transaction_type="NEW_CUSTOMER"
+                transaction_type="NEW_CUSTOMER"  # untuk logging
             )
 
             payment['havn_transaction_id'] = result.transaction.transaction_id

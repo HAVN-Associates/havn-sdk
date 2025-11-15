@@ -25,6 +25,8 @@ def handle_validation_errors():
         # This will raise validation error (negative amount)
         result = client.transactions.send(
             amount=-100,  # Invalid: negative amount
+            payment_gateway_transaction_id="stripe_test",
+            customer_email="customer@example.com",
             referral_code="HAVN-MJ-001",
         )
     except HAVNValidationError as e:
@@ -44,7 +46,10 @@ def handle_authentication_errors():
 
         # This will raise authentication error
         result = bad_client.transactions.send(
-            amount=10000, referral_code="HAVN-MJ-001"
+            amount=10000,
+            payment_gateway_transaction_id="stripe_test",
+            customer_email="customer@example.com",
+            referral_code="HAVN-MJ-001",
         )
     except HAVNAuthError as e:
         print(f"✅ Caught authentication error: {e}")
@@ -71,12 +76,17 @@ def handle_network_errors():
     try:
         # Create client with invalid URL
         bad_client = HAVNClient(
-            api_key="key", webhook_secret="secret", base_url="https://invalid-url-that-does-not-exist.com"
+            api_key="key",
+            webhook_secret="secret",
+            base_url="https://invalid-url-that-does-not-exist.com",
         )
 
         # This will raise network error
         result = bad_client.transactions.send(
-            amount=10000, referral_code="HAVN-MJ-001"
+            amount=10000,
+            payment_gateway_transaction_id="stripe_test",
+            customer_email="customer@example.com",
+            referral_code="HAVN-MJ-001",
         )
     except HAVNNetworkError as e:
         print(f"✅ Caught network error: {e}")
@@ -92,6 +102,8 @@ def handle_all_errors():
     try:
         result = client.transactions.send(
             amount=10000,
+            payment_gateway_transaction_id="stripe_test",
+            customer_email="customer@example.com",
             referral_code="HAVN-MJ-001",
             custom_fields={"key": "value"},
         )

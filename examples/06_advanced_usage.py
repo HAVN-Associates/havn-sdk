@@ -141,7 +141,7 @@ def transaction_with_all_fields():
             invoice_id="INV-2024-001",
             transaction_type="SUBSCRIPTION",
             description="Monthly subscription renewal",
-            # acquisition_method akan auto-determined sebagai REFERRAL_VOUCHER (karena ada promo_code)
+            # acquisition_method akan auto-determined sebagai REFERRAL_VOUCHER (karena ada promo_code DAN referral_code)
         )
 
         print("✅ Transaction with all fields successful!")

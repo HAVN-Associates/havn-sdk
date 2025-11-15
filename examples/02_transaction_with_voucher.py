@@ -36,7 +36,7 @@ def send_transaction_with_voucher():
                 "order_id": "ORD123456",
                 "payment_method": "credit_card",
             },
-            # acquisition_method akan auto-determined sebagai REFERRAL_VOUCHER (karena ada promo_code)
+            # acquisition_method akan auto-determined sebagai REFERRAL_VOUCHER (karena ada promo_code DAN referral_code)
         )
 
         # Display results

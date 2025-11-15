@@ -82,8 +82,8 @@ class TransactionWebhook:
             subtotal_transaction: Original amount before discount (optional)
                 - Same currency rules as amount
             acquisition_method: REFERRAL or REFERRAL_VOUCHER (optional, auto-determined)
-                - REFERRAL_VOUCHER: Jika ada promo_code (voucher)
-                - REFERRAL: Jika hanya ada referral_code
+                - REFERRAL_VOUCHER: Jika ada promo_code DAN referral_code (keduanya wajib)
+                - REFERRAL: Jika hanya ada referral_code (tanpa promo_code)
                 - Tidak ada "VOUCHER" standalone (voucher selalu dikaitkan dengan referral)
                 - Jika tidak disediakan, akan auto-determined dari promo_code/referral_code
             custom_fields: Custom metadata (max 3 entries) (optional)
@@ -145,9 +145,11 @@ class TransactionWebhook:
         """
         # Auto-determine acquisition_method if not provided (before voucher check)
         if not acquisition_method:
-            if promo_code and is_havn_voucher_code(promo_code):
+            if promo_code and is_havn_voucher_code(promo_code) and referral_code:
+                # REFERRAL_VOUCHER requires both promo_code and referral_code
                 acquisition_method = "REFERRAL_VOUCHER"
             elif referral_code:
+                # REFERRAL: only referral_code (no promo_code)
                 acquisition_method = "REFERRAL"
             else:
                 acquisition_method = "FAIL"  # Will be validated by backend

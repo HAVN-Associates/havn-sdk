@@ -222,6 +222,23 @@ if result.associate:
     print(f"User linked to associate: {result.associate.referral_code}")
 ```
 
+### 4a. User Sync dengan is_owner (Set Role Owner)
+
+```python
+# Sync project owner dengan role "owner"
+result = client.users.sync(
+    email="owner@shopeasy.com",
+    name="John Doe",
+    is_owner=True,  # Set role sebagai "owner" instead of "partner"
+    upline_code="HAVN-MJ-001",
+    create_associate=True
+)
+
+if result.associate:
+    print(f"Owner created: {result.associate.referral_code}")
+    # User akan punya role "owner" di associate
+```
+
 ### 5. Bulk User Sync (Basic)
 
 ```python
@@ -381,10 +398,11 @@ except HAVNAPIError as e:
 ```python
 # Scenario: Sync semua users dalam project ke associate yang sama
 
-# Step 1: Sync project owner (create associate baru)
+# Step 1: Sync project owner (create associate baru dengan role "owner")
 owner_result = client.users.sync(
     email="owner@shopeasy.com",
     name="John Doe",
+    is_owner=True,  # Set role sebagai "owner"
     upline_code="HAVN-MJ-001",
     create_associate=True
 )
@@ -392,7 +410,7 @@ owner_result = client.users.sync(
 project_referral_code = owner_result.associate.referral_code if owner_result.associate else None
 print(f"Project referral_code: {project_referral_code}")
 
-# Step 2: Sync team members ke associate yang sama
+# Step 2: Sync team members ke associate yang sama (dengan role "partner")
 team_members = [
     {"email": "admin@shopeasy.com", "name": "Jane Smith"},
     {"email": "manager@shopeasy.com", "name": "Bob Johnson"},
@@ -402,11 +420,13 @@ team_members = [
 if project_referral_code:
     team_result = client.users.sync_bulk(
         users=team_members,
-        referral_code=project_referral_code  # Link semua ke associate project
+        referral_code=project_referral_code,  # Link semua ke associate project
+        is_owner=False  # Semua team members jadi "partner" (default)
     )
-    
+
     print(f"Team members synced: {team_result.summary.success}")
     print(f"All members linked to: {project_referral_code}")
+    # Owner punya role "owner", team members punya role "partner"
 ```
 
 ---
@@ -483,6 +503,253 @@ except HAVNAPIError:
     print("❌ Voucher invalid")
 ```
 
+### 4. Validate Voucher dengan Auto-Conversion (Currency)
+
+Validate voucher dengan amount dalam currency berbeda dari voucher currency.
+
+```python
+from havn import HAVNClient
+from havn.exceptions import HAVNAPIError
+
+client = HAVNClient(api_key="...", webhook_secret="...")
+
+# Validate dengan amount dalam IDR, tapi voucher currency USD
+# SDK akan auto-convert amount ke voucher currency (convenience)
+# Backend akan convert ulang server-side untuk security
+try:
+    is_valid = client.vouchers.validate(
+        voucher_code="HAVN-123",
+        amount=150000,  # IDR rupiah (150.000 IDR)
+        currency="IDR",  # SDK converts to voucher currency (USD) for convenience
+        auto_convert=True  # Default (backend tetap convert server-side)
+    )
+    print("✅ Voucher is valid!")
+except HAVNAPIError as e:
+    if e.status_code == 404:
+        print("❌ Voucher not found")
+    elif e.status_code == 400:
+        print("❌ Voucher invalid or currency conversion failed")
+    elif e.status_code == 422:
+        print("❌ Amount does not meet voucher requirements")
+# Note: Backend always converts server-side (security requirement)
+```
+
+### 5. Get Voucher dengan Currency Conversion
+
+Get vouchers dengan amounts di-convert ke currency lokal untuk display.
+
+```python
+from havn import HAVNClient
+
+client = HAVNClient(api_key="...", webhook_secret="...")
+
+# Get vouchers dengan amounts dalam IDR (untuk display)
+result = client.vouchers.get_all(display_currency="IDR")
+
+for voucher in result.data:
+    print(f"Code: {voucher.code}")
+    print(f"Value: {voucher.value} IDR")  # Converted from USD
+    print(f"Min Purchase: {voucher.min_purchase} IDR")  # Converted
+    print(f"Currency: {voucher.currency}")  # "IDR"
+    # Hanya HAVN vouchers yang di-convert, local vouchers keep original currency
+```
+
+### 6. Get Combined Vouchers dengan Currency Conversion
+
+Get combined vouchers (HAVN + local) dengan HAVN vouchers di-convert ke currency lokal.
+
+```python
+def get_local_vouchers():
+    return [
+        {
+            "code": "LOCAL123",
+            "type": "DISCOUNT_PERCENTAGE",
+            "value": 2000,
+            "min_purchase": 5000,
+            "currency": "IDR",  # Local voucher dalam IDR
+            # ... other fields
+        }
+    ]
+
+# Get combined dengan display currency IDR
+result = client.vouchers.get_combined(
+    local_vouchers_callback=get_local_vouchers,
+    display_currency="IDR"  # Convert HAVN vouchers to IDR
+)
+
+for voucher in result.data:
+    if voucher.is_havn_voucher:
+        print(f"HAVN: {voucher.code} - {voucher.currency} IDR")  # Converted
+    else:
+        print(f"Local: {voucher.code} - {voucher.currency} IDR")  # Original
+```
+
+---
+
+## Currency Conversion Examples
+
+### Auto-Conversion (Recommended)
+
+SDK dapat auto-convert non-USD amounts ke USD cents sebelum kirim ke HAVN.
+
+**Security Note:** Backend selalu verify conversion dengan recalculate server-side. Amount harus match exact (no tolerance). Jika mismatch, transaction akan di-mark sebagai `FAILED`.
+
+```python
+from havn import HAVNClient
+
+client = HAVNClient(api_key="...", webhook_secret="...")
+
+# Transaction dengan IDR - SDK auto-convert ke USD cents
+result = client.transactions.send(
+    amount=150000,  # IDR rupiah (150.000 IDR)
+    currency="IDR",  # SDK auto-convert ke USD cents
+    referral_code="HAVN-MJ-001"
+)
+
+print(f"Transaction ID: {result.transaction.transaction_id}")
+print(f"Amount: ${result.transaction.amount / 100:.2f}")  # USD cents
+# Original amount & exchange rate tersimpan di custom_fields untuk audit
+# ⚠️ Security: Backend verifies conversion dengan exact match (no tolerance)
+#    Jika mismatch → transaction FAILED
+```
+
+### Manual Conversion
+
+Gunakan helper function untuk convert manual sebelum kirim.
+
+```python
+from havn import HAVNClient
+from havn.utils.currency import convert_to_usd_cents
+
+client = HAVNClient(api_key="...", webhook_secret="...")
+
+# Convert manual
+conversion_result = convert_to_usd_cents(150000, "IDR")
+usd_cents = conversion_result["amount_cents"]
+
+print(f"Original: 150000 IDR")
+print(f"Converted: {usd_cents} USD cents")
+print(f"Exchange Rate: {conversion_result['exchange_rate']}")
+
+# Kirim dengan USD
+result = client.transactions.send(
+    amount=usd_cents,
+    currency="USD",
+    referral_code="HAVN-MJ-001"
+)
+```
+
+### Convert Response untuk Display
+
+Convert response dari USD cents ke currency lokal untuk display di frontend.
+
+```python
+from havn import HAVNClient
+from havn.utils.currency import convert_from_usd_cents
+
+client = HAVNClient(api_key="...", webhook_secret="...")
+
+result = client.transactions.send(
+    amount=10000,
+    currency="USD",
+    referral_code="HAVN-MJ-001"
+)
+
+# Convert response untuk display
+idr_result = convert_from_usd_cents(
+    result.transaction.amount,  # USD cents
+    "IDR"
+)
+
+print(f"Amount: {idr_result['amount_formatted']}")  # "Rp 150.000"
+print(f"Original: ${result.transaction.amount / 100:.2f}")  # "$10.00"
+```
+
+### Disable Auto-Conversion
+
+Jika ingin backend handle conversion, disable auto-conversion di SDK.
+
+```python
+from havn import HAVNClient
+
+client = HAVNClient(api_key="...", webhook_secret="...")
+
+# Kirim amount sudah dalam USD cents, tapi info currency tetap ada
+result = client.transactions.send(
+    amount=10000,  # Sudah dalam USD cents
+    currency="IDR",  # Info saja, backend akan handle conversion
+    auto_convert=False,  # Disable auto-conversion
+    referral_code="HAVN-MJ-001"
+)
+```
+
+### Multiple Currency Support
+
+SDK mendukung berbagai currency dengan auto-conversion.
+
+```python
+from havn import HAVNClient
+
+client = HAVNClient(api_key="...", webhook_secret="...")
+
+# EUR
+result = client.transactions.send(
+    amount=8500,  # EUR cents (85.00 EUR)
+    currency="EUR",
+    referral_code="HAVN-MJ-001"
+)
+
+# GBP
+result = client.transactions.send(
+    amount=7500,  # GBP pence (75.00 GBP)
+    currency="GBP",
+    referral_code="HAVN-MJ-001"
+)
+
+# IDR
+result = client.transactions.send(
+    amount=150000,  # IDR rupiah (150.000 IDR)
+    currency="IDR",
+    referral_code="HAVN-MJ-001"
+)
+```
+
+### Get Exchange Rate
+
+Check exchange rate sebelum convert.
+
+```python
+from havn.utils.currency import get_exchange_rate
+
+# Get exchange rate
+rate = get_exchange_rate("IDR", "USD")  # 1 USD = X IDR
+print(f"Exchange Rate: {rate}")
+
+if rate:
+    # Calculate expected conversion
+    idr_amount = 150000
+    usd_amount = idr_amount * rate
+    print(f"{idr_amount} IDR = {usd_amount:.2f} USD")
+```
+
+### Currency Converter Configuration
+
+Configure currency converter dengan custom settings.
+
+```python
+from havn.utils.currency import CurrencyConverter
+
+# Custom converter dengan custom cache duration
+converter = CurrencyConverter(
+    exchange_rate_api_url="https://api.exchangerate-api.com/v4/latest/USD",
+    cache_duration_hours=12,  # Cache untuk 12 jam
+    api_timeout=10  # Timeout 10 detik
+)
+
+result = converter.convert_to_usd_cents(150000, "IDR")
+print(result["amount_cents"])
+```
+
 ---
 
 ## Error Handling Examples
@@ -495,7 +762,8 @@ from havn.exceptions import (
     HAVNAuthError,
     HAVNValidationError,
     HAVNAPIError,
-    HAVNNetworkError
+    HAVNNetworkError,
+    HAVNRateLimitError,
 )
 
 client = HAVNClient(api_key="...", webhook_secret="...")
@@ -506,25 +774,32 @@ try:
         referral_code="HAVN-MJ-001"
     )
     print(f"✅ Success: {result.transaction.transaction_id}")
-    
+
 except HAVNValidationError as e:
     # Input validation error (sebelum request ke API)
     print(f"❌ Validation error: {e.message}")
     if e.errors:
         for field, error in e.errors.items():
             print(f"  - {field}: {error}")
-            
+
 except HAVNAuthError as e:
     # Authentication error (401)
     print(f"❌ Authentication failed: {e.message}")
     print("   Check your API key and webhook secret")
-    
+
 except HAVNAPIError as e:
     # API error (4xx, 5xx)
     print(f"❌ API error ({e.status_code}): {e.message}")
     if e.response:
         print(f"   Details: {e.response}")
-        
+
+except HAVNRateLimitError as e:
+    # Rate limit exceeded (429)
+    print(f"❌ Rate limit exceeded. Retry after {e.retry_after} seconds")
+    print(f"   Limit: {e.limit}, Remaining: {e.remaining}")
+    if e.retry_after:
+        time.sleep(e.retry_after)
+        # Retry request here
 except HAVNNetworkError as e:
     # Network error (timeout, connection)
     print(f"❌ Network error: {e.message}")
@@ -533,7 +808,33 @@ except HAVNNetworkError as e:
     print("   Check your internet connection or HAVN API status")
 ```
 
-### 2. Retry on Network Error
+### 2. Rate Limit Handling
+
+```python
+import time
+from havn.exceptions import HAVNRateLimitError
+
+def send_transaction_with_rate_limit_handling(client, max_retries=3):
+    """Send transaction dengan rate limit handling"""
+    for attempt in range(max_retries):
+        try:
+            result = client.transactions.send(
+                amount=10000,
+                referral_code="HAVN-MJ-001"
+            )
+            return result
+        except HAVNRateLimitError as e:
+            # Rate limit exceeded dengan detailed info
+            wait_time = e.retry_after or (2 ** attempt)  # Use retry_after or exponential backoff
+            print(f"⚠️ Rate limit exceeded. Retry after {wait_time}s... ({attempt + 1}/{max_retries})")
+            print(f"   Limit: {e.limit}, Remaining: {e.remaining}")
+            if attempt < max_retries - 1:
+                time.sleep(wait_time)
+            else:
+                raise  # Re-raise on last attempt
+```
+
+### 3. Retry on Network Error
 
 ```python
 import time
@@ -557,7 +858,7 @@ def send_transaction_with_retry(client, max_retries=3):
                 raise  # Re-raise on last attempt
 ```
 
-### 3. Validation sebelum Request
+### 4. Validation sebelum Request
 
 ```python
 from havn.utils.validators import validate_amount, validate_currency
@@ -571,7 +872,7 @@ def safe_send_transaction(client, amount: int, currency: str = "USD"):
     except ValueError as e:
         print(f"❌ Invalid input: {e}")
         return None
-    
+
     try:
         return client.transactions.send(amount=amount, currency=currency)
     except HAVNAPIError as e:
@@ -595,7 +896,7 @@ def process_batch_transactions(client, transactions: list):
     """Process multiple transactions dengan error handling"""
     results = []
     errors = []
-    
+
     for tx in transactions:
         try:
             result = client.transactions.send(**tx)
@@ -609,7 +910,7 @@ def process_batch_transactions(client, transactions: list):
                 "error": str(e),
                 "transaction": tx
             })
-    
+
     return {"results": results, "errors": errors}
 
 # Usage
@@ -629,7 +930,7 @@ print(f"❌ Errors: {len(batch_result['errors'])}")
 ```python
 def send_transaction_with_voucher(client, amount: int, referral_code: str, voucher_code: str = None):
     """Send transaction dengan optional voucher"""
-    
+
     # Validate voucher jika ada
     if voucher_code:
         try:
@@ -638,7 +939,7 @@ def send_transaction_with_voucher(client, amount: int, referral_code: str, vouch
         except HAVNAPIError:
             print(f"❌ Voucher {voucher_code} is invalid, proceeding without voucher")
             voucher_code = None
-    
+
     # Send transaction
     if voucher_code:
         # Calculate discount (assuming 20% discount for example)
@@ -669,12 +970,12 @@ result = send_transaction_with_voucher(
 ```python
 def complete_user_signup_flow(client, user_data: dict, first_transaction: dict):
     """Complete user signup dan first transaction"""
-    
+
     # Step 1: Sync user
     try:
         user_result = client.users.sync(**user_data)
         print(f"✅ User synced: {user_result.user.email}")
-        
+
         # Step 2: Send first transaction jika associate dibuat
         if user_result.associate_created and user_result.associate:
             tx_result = client.transactions.send(**first_transaction)
@@ -691,7 +992,7 @@ def complete_user_signup_flow(client, user_data: dict, first_transaction: dict):
                 "associate": None,
                 "transaction": None
             }
-            
+
     except Exception as e:
         print(f"❌ Error in signup flow: {e}")
         raise
@@ -763,7 +1064,6 @@ fast_client = HAVNClient(
 ## Next Steps
 
 - Baca [API Reference](API_REFERENCE.md) untuk dokumentasi lengkap semua methods
-- Lihat [Concepts Guide](CONCEPTS.md) untuk memahami konsep dasar
-- Check [Configuration Guide](CONFIGURATION.md) untuk konfigurasi lanjutan
-- Review [Troubleshooting Guide](TROUBLESHOOTING.md) jika ada masalah
-
+- Lihat [API Reference](API_REFERENCE.md) untuk dokumentasi lengkap
+- Lihat [Integration Flow](INTEGRATION_FLOW.md) untuk panduan integrasi
+- Review [README](../README.md) untuk quick start dan common issues

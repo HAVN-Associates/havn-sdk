@@ -368,6 +368,199 @@ print(f"User created: {result.user_created}")  # False jika sudah ada
 print(f"Associate created: {result.associate_created}")  # False
 ```
 
+**User Sync dengan Referral Code (Link ke Associate yang sudah ada):**
+
+```python
+# Link user ke associate yang sudah ada
+result = client.users.sync(
+    email="newuser@example.com",
+    name="New User",
+    referral_code="HAVN-SE-002",  # Referral code dari associate yang sudah ada
+    create_associate=False  # Tidak create associate baru, link ke yang sudah ada
+)
+
+if result.associate:
+    print(f"User linked to associate: {result.associate.referral_code}")
+```
+
+#### `sync_bulk()`
+
+Sync multiple users ke HAVN API dalam satu request (bulk sync).
+
+```python
+client.users.sync_bulk(
+    users: List[Dict[str, Any]],
+    upline_code: Optional[str] = None,
+    referral_code: Optional[str] = None,
+    create_associate: Optional[bool] = None,
+) -> BulkUserSyncResponse
+```
+
+#### Parameters
+
+| Parameter          | Type                   | Required | Default | Description                                                                 |
+| ------------------ | ---------------------- | -------- | ------- | --------------------------------------------------------------------------- |
+| `users`            | `List[Dict[str, Any]]` | ✅ Yes   | -       | List user data (max 50 users per batch)                                     |
+| `upline_code`      | `str`                  | No       | `None`  | Shared upline referral code untuk semua users                               |
+| `referral_code`    | `str`                  | No       | `None`  | Shared referral code untuk link semua users ke associate yang sudah ada     |
+| `create_associate` | `bool`                 | No       | `None`  | Shared flag untuk associate creation (jika None, akan auto-detect per user) |
+
+**User Dictionary Fields:**
+
+Setiap user dalam `users` list harus memiliki:
+
+- `email` (`str`, required): User email
+- `name` (`str`, required): User full name (max 200 characters)
+- `google_id` (`str`, optional): Google OAuth ID
+- `picture` (`str`, optional): Profile picture URL
+- `avatar` (`str`, optional): Avatar URL
+- `upline_code` (`str`, optional): Per-user upline code (override shared upline_code)
+- `referral_code` (`str`, optional): Per-user referral code (override shared referral_code)
+- `country_code` (`str`, optional): Country code (2 uppercase letters)
+- `create_associate` (`bool`, optional): Per-user flag (override shared create_associate)
+
+#### Returns
+
+`BulkUserSyncResponse` - Response object dengan:
+
+- `results`: List of `UserSyncResponse` untuk setiap user yang berhasil
+- `summary`: Summary statistics (total, success, errors)
+- `referral_code`: Referral code dari user pertama yang berhasil (untuk batch berikutnya)
+- `errors`: List errors untuk users yang gagal (jika ada)
+
+#### Raises
+
+- `HAVNValidationError`: Jika payload validation gagal (users empty, max size exceeded, invalid fields)
+- `HAVNAPIError`: Jika API request gagal
+- `HAVNAuthError`: Jika authentication gagal
+- `HAVNNetworkError`: Jika network error terjadi
+
+#### Examples
+
+**Basic Bulk Sync:**
+
+```python
+result = client.users.sync_bulk(
+    users=[
+        {"email": "user1@example.com", "name": "John Doe"},
+        {"email": "user2@example.com", "name": "Jane Smith"},
+        {"email": "user3@example.com", "name": "Bob Johnson"},
+    ],
+    upline_code="HAVN-MJ-001",
+    create_associate=True
+)
+
+print(f"Total: {result.summary.total}")
+print(f"Success: {result.summary.success}")
+print(f"Errors: {result.summary.errors}")
+
+# Access results
+for user_result in result.results:
+    print(f"{user_result.user.email}: {user_result.user_created}")
+
+# Get referral_code for next batch
+if result.referral_code:
+    print(f"Referral code: {result.referral_code}")
+```
+
+**Bulk Sync dengan Shared Parameters:**
+
+```python
+# Semua users akan share upline_code dan create_associate
+result = client.users.sync_bulk(
+    users=[
+        {"email": "user1@example.com", "name": "John Doe"},
+        {"email": "user2@example.com", "name": "Jane Smith"},
+    ],
+    upline_code="HAVN-MJ-001",  # Shared untuk semua
+    create_associate=True  # Shared untuk semua
+)
+```
+
+**Bulk Sync dengan Per-User Override:**
+
+```python
+# Shared upline_code, tapi user2 punya upline_code sendiri
+result = client.users.sync_bulk(
+    users=[
+        {"email": "user1@example.com", "name": "John Doe"},
+        {"email": "user2@example.com", "name": "Jane Smith", "upline_code": "HAVN-OTHER-001"},
+    ],
+    upline_code="HAVN-MJ-001",  # Default untuk user1
+    create_associate=True
+)
+```
+
+**Bulk Sync untuk Link ke Associate yang sudah ada:**
+
+```python
+# Link semua users ke associate yang sama
+result = client.users.sync_bulk(
+    users=[
+        {"email": "user4@example.com", "name": "Alice Brown"},
+        {"email": "user5@example.com", "name": "Charlie Wilson"},
+    ],
+    referral_code="HAVN-SE-002"  # Dari batch sebelumnya
+)
+
+# Semua users akan di-link ke associate dengan referral_code ini
+for user_result in result.results:
+    if user_result.associate:
+        print(f"{user_result.user.email} -> {user_result.associate.referral_code}")
+```
+
+**Batch Processing dengan Referral Code:**
+
+```python
+# Batch pertama - create associates baru
+batch1_result = client.users.sync_bulk(
+    users=[
+        {"email": "user1@example.com", "name": "John Doe"},
+        {"email": "user2@example.com", "name": "Jane Smith"},
+    ],
+    upline_code="HAVN-MJ-001"
+)
+
+referral_code = batch1_result.referral_code  # "HAVN-SE-002"
+
+# Batch kedua - link ke associate dari batch pertama
+batch2_result = client.users.sync_bulk(
+    users=[
+        {"email": "user3@example.com", "name": "Bob Johnson"},
+        {"email": "user4@example.com", "name": "Alice Brown"},
+    ],
+    referral_code=referral_code  # Semua di-link ke associate yang sama
+)
+```
+
+**Error Handling dalam Bulk Sync:**
+
+```python
+try:
+    result = client.users.sync_bulk(
+        users=[
+            {"email": "user1@example.com", "name": "John Doe"},
+            {"email": "invalid-email", "name": "Invalid User"},  # Will fail
+            {"email": "user3@example.com", "name": "Valid User"},
+        ]
+    )
+
+    # Partial success - check errors
+    if result.errors:
+        print(f"Errors occurred: {len(result.errors)}")
+        for error in result.errors:
+            print(f"Index {error['index']}: {error['error']}")
+
+    # Process successful results
+    for user_result in result.results:
+        print(f"✅ {user_result.user.email}: Success")
+
+except HAVNValidationError as e:
+    print(f"Validation error: {e}")
+except HAVNAPIError as e:
+    print(f"API error: {e}")
+```
+
 ---
 
 ### VoucherWebhook
@@ -631,6 +824,72 @@ if result.associate:
     print(f"Associate ID: {result.associate.associate_id}")
     print(f"Referral code: {result.associate.referral_code}")
     print(f"Associate created: {result.associate_created}")
+```
+
+#### BulkUserSyncPayload
+
+Payload untuk bulk user sync webhook.
+
+**Attributes:**
+
+- `users` (`List[Dict[str, Any]]`): List user data (required, max 50)
+- `upline_code` (`Optional[str]`): Shared upline referral code
+- `referral_code` (`Optional[str]`): Shared referral code untuk linking
+- `create_associate` (`Optional[bool]`): Shared flag untuk associate creation
+
+#### BulkSyncSummary
+
+Summary statistics dari bulk sync.
+
+**Attributes:**
+
+- `total` (`int`): Total users dalam request
+- `success` (`int`): Jumlah users yang berhasil di-sync
+- `errors` (`int`): Jumlah users yang gagal di-sync
+
+#### BulkUserSyncResponse
+
+Response dari bulk user sync webhook.
+
+**Attributes:**
+
+- `success` (`bool`): Apakah request berhasil (True jika ada minimal 1 success)
+- `message` (`str`): Response message
+- `results` (`List[UserSyncResponse]`): List hasil sync untuk setiap user yang berhasil
+- `summary` (`BulkSyncSummary`): Summary statistics
+- `referral_code` (`Optional[str]`): Referral code dari user pertama yang berhasil (untuk next batch)
+- `errors` (`Optional[List[Dict[str, Any]]]`): List errors untuk users yang gagal
+- `raw_response` (`Dict[str, Any]`): Raw response dictionary
+
+**Example:**
+
+```python
+result = client.users.sync_bulk(
+    users=[
+        {"email": "user1@example.com", "name": "John Doe"},
+        {"email": "user2@example.com", "name": "Jane Smith"},
+    ]
+)
+
+# Access summary
+print(f"Total: {result.summary.total}")
+print(f"Success: {result.summary.success}")
+print(f"Errors: {result.summary.errors}")
+
+# Access results
+for user_result in result.results:
+    print(f"✅ {user_result.user.email}")
+    if user_result.associate:
+        print(f"   Referral code: {user_result.associate.referral_code}")
+
+# Access errors (if any)
+if result.errors:
+    for error in result.errors:
+        print(f"❌ Index {error['index']}: {error['error']}")
+
+# Get referral_code for next batch
+if result.referral_code:
+    print(f"Referral code for next batch: {result.referral_code}")
 ```
 
 ---

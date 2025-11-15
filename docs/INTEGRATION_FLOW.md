@@ -239,12 +239,93 @@ except Exception as e:
     print(f"Unexpected error: {e}")
 ```
 
+**Bulk User Sync (Sync Multiple Users dalam Project):**
+
+Jika project memiliki multiple users yang perlu di-sync ke associate yang sama:
+
+```python
+from havn import HAVNClient
+
+client = HAVNClient(api_key="...", webhook_secret="...")
+
+# Step 1: Sync project owner (create associate baru)
+owner_result = client.users.sync(
+    email="owner@shopeasy.com",
+    name="John Doe",
+    upline_code=project.upline_referral_code,
+    create_associate=True
+)
+
+# Simpan referral_code project
+project.referral_code = owner_result.associate.referral_code if owner_result.associate else None
+project.save()
+
+# Step 2: Sync team members ke associate yang sama (bulk)
+if project.referral_code:
+    team_members = [
+        {"email": "admin@shopeasy.com", "name": "Jane Smith"},
+        {"email": "manager@shopeasy.com", "name": "Bob Johnson"},
+        {"email": "support@shopeasy.com", "name": "Alice Brown"},
+    ]
+    
+    team_result = client.users.sync_bulk(
+        users=team_members,
+        referral_code=project.referral_code  # Link semua ke associate project
+    )
+    
+    print(f"Team members synced: {team_result.summary.success}/{team_result.summary.total}")
+    if team_result.errors:
+        print(f"Errors: {len(team_result.errors)}")
+        for error in team_result.errors:
+            print(f"  - {error['email']}: {error['error']}")
+```
+
+**Batch Processing untuk Large Projects:**
+
+Untuk project dengan banyak users (>50), gunakan batch processing:
+
+```python
+# Batch pertama - sync owner dan initial team
+batch1_users = [
+    {"email": "owner@shopeasy.com", "name": "John Doe"},
+    {"email": "admin@shopeasy.com", "name": "Jane Smith"},
+    # ... max 50 users
+]
+
+batch1_result = client.users.sync_bulk(
+    users=batch1_users,
+    upline_code=project.upline_referral_code
+)
+
+# Simpan referral_code untuk batch berikutnya
+project.referral_code = batch1_result.referral_code
+project.save()
+
+# Batch kedua - link users ke associate yang sama
+if project.referral_code:
+    batch2_users = [
+        {"email": "user51@shopeasy.com", "name": "User 51"},
+        {"email": "user52@shopeasy.com", "name": "User 52"},
+        # ... max 50 users
+    ]
+    
+    batch2_result = client.users.sync_bulk(
+        users=batch2_users,
+        referral_code=project.referral_code  # Link ke associate dari batch 1
+    )
+    
+    print(f"Batch 2: {batch2_result.summary.success} users linked")
+```
+
 **Catatan Penting:**
 
 - ✅ `upline_code` harus dikirim jika project memiliki upline
 - ✅ HAVN akan generate `referral_code` unik untuk project ini
 - ✅ `referral_code` harus disimpan ke database untuk digunakan di tahap selanjutnya
 - ✅ `referral_code` digunakan sebagai identifier project di HAVN
+- ✅ **Multiple users bisa di-link ke associate yang sama** menggunakan `referral_code`
+- ✅ **Bulk sync** mendukung max 50 users per batch (configurable via `USER_SYNC_BULK_MAX_SIZE`)
+- ✅ **Batch processing** bisa digunakan untuk sync banyak users dengan referral_code dari batch sebelumnya
 
 ---
 

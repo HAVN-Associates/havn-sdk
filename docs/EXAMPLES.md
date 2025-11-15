@@ -207,20 +207,206 @@ print(f"User created: {result.user_created}")  # False jika user sudah ada
 print(f"Associate created: {result.associate_created}")  # False
 ```
 
-### 4. User Sync dengan Custom Referral Code
+### 4. User Sync dengan Referral Code (Link ke Associate yang sudah ada)
 
 ```python
-# User sync dengan custom referral code
+# Link user ke associate yang sudah ada menggunakan referral_code
 result = client.users.sync(
-    email="vip@example.com",
-    name="VIP User",
-    referral_code="VIP-001",  # Custom referral code
-    create_associate=True,
-    avatar="https://example.com/avatar.jpg"
+    email="newuser@example.com",
+    name="New User",
+    referral_code="HAVN-SE-002",  # Referral code dari associate yang sudah ada
+    create_associate=False  # Tidak create associate baru, link ke yang sudah ada
 )
 
 if result.associate:
-    print(f"Custom referral code: {result.associate.referral_code}")
+    print(f"User linked to associate: {result.associate.referral_code}")
+```
+
+### 5. Bulk User Sync (Basic)
+
+```python
+from havn import HAVNClient
+
+client = HAVNClient(api_key="...", webhook_secret="...")
+
+# Sync multiple users dalam satu request
+result = client.users.sync_bulk(
+    users=[
+        {"email": "user1@example.com", "name": "John Doe"},
+        {"email": "user2@example.com", "name": "Jane Smith"},
+        {"email": "user3@example.com", "name": "Bob Johnson"},
+    ],
+    upline_code="HAVN-MJ-001",
+    create_associate=True
+)
+
+# Check summary
+print(f"Total: {result.summary.total}")
+print(f"Success: {result.summary.success}")
+print(f"Errors: {result.summary.errors}")
+
+# Access results
+for user_result in result.results:
+    print(f"✅ {user_result.user.email}: Created={user_result.user_created}")
+    if user_result.associate:
+        print(f"   Associate: {user_result.associate.referral_code}")
+```
+
+### 6. Bulk User Sync dengan Shared Parameters
+
+```python
+# Semua users akan share upline_code dan create_associate
+result = client.users.sync_bulk(
+    users=[
+        {"email": "user1@example.com", "name": "John Doe"},
+        {"email": "user2@example.com", "name": "Jane Smith"},
+        {"email": "user3@example.com", "name": "Bob Johnson"},
+    ],
+    upline_code="HAVN-MJ-001",  # Shared untuk semua
+    create_associate=True  # Shared untuk semua
+)
+
+# Semua users akan punya upline yang sama
+for user_result in result.results:
+    if user_result.associate:
+        print(f"{user_result.user.email} -> Upline: HAVN-MJ-001")
+```
+
+### 7. Bulk User Sync dengan Per-User Override
+
+```python
+# Shared upline_code, tapi user2 punya upline_code sendiri
+result = client.users.sync_bulk(
+    users=[
+        {"email": "user1@example.com", "name": "John Doe"},
+        {"email": "user2@example.com", "name": "Jane Smith", "upline_code": "HAVN-OTHER-001"},
+        {"email": "user3@example.com", "name": "Bob Johnson"},
+    ],
+    upline_code="HAVN-MJ-001",  # Default untuk user1 dan user3
+    create_associate=True
+)
+
+# user1 dan user3 akan punya upline HAVN-MJ-001
+# user2 akan punya upline HAVN-OTHER-001
+```
+
+### 8. Bulk User Sync untuk Link ke Associate yang sudah ada
+
+```python
+# Link semua users ke associate yang sama menggunakan referral_code
+result = client.users.sync_bulk(
+    users=[
+        {"email": "user4@example.com", "name": "Alice Brown"},
+        {"email": "user5@example.com", "name": "Charlie Wilson"},
+        {"email": "user6@example.com", "name": "David Lee"},
+    ],
+    referral_code="HAVN-SE-002"  # Dari associate yang sudah ada
+)
+
+# Semua users akan di-link ke associate dengan referral_code ini
+for user_result in result.results:
+    if user_result.associate:
+        print(f"{user_result.user.email} -> {user_result.associate.referral_code}")
+        # Semua akan punya referral_code yang sama: HAVN-SE-002
+```
+
+### 9. Batch Processing dengan Referral Code
+
+```python
+# Batch pertama - create associates baru
+batch1_result = client.users.sync_bulk(
+    users=[
+        {"email": "user1@example.com", "name": "John Doe"},
+        {"email": "user2@example.com", "name": "Jane Smith"},
+    ],
+    upline_code="HAVN-MJ-001"
+)
+
+# Get referral_code dari user pertama untuk batch berikutnya
+referral_code = batch1_result.referral_code  # "HAVN-SE-002"
+print(f"Batch 1 referral_code: {referral_code}")
+
+# Batch kedua - link ke associate dari batch pertama
+batch2_result = client.users.sync_bulk(
+    users=[
+        {"email": "user3@example.com", "name": "Bob Johnson"},
+        {"email": "user4@example.com", "name": "Alice Brown"},
+    ],
+    referral_code=referral_code  # Semua di-link ke associate yang sama dari batch1
+)
+
+print(f"Batch 2: {batch2_result.summary.success} users linked to {referral_code}")
+```
+
+### 10. Bulk User Sync dengan Error Handling
+
+```python
+from havn import HAVNClient
+from havn.exceptions import HAVNValidationError, HAVNAPIError
+
+client = HAVNClient(api_key="...", webhook_secret="...")
+
+try:
+    result = client.users.sync_bulk(
+        users=[
+            {"email": "user1@example.com", "name": "John Doe"},  # Valid
+            {"email": "invalid-email", "name": "Invalid User"},  # Will fail validation
+            {"email": "user3@example.com", "name": "Valid User"},  # Valid
+            {"email": "", "name": "Empty Email"},  # Will fail
+        ]
+    )
+
+    # Partial success - check errors
+    if result.errors:
+        print(f"⚠️ Errors occurred: {len(result.errors)}")
+        for error in result.errors:
+            print(f"   Index {error['index']}: {error['email']} - {error['error']}")
+
+    # Process successful results
+    if result.summary.success > 0:
+        print(f"✅ Successfully synced {result.summary.success} users:")
+        for user_result in result.results:
+            print(f"   - {user_result.user.email}")
+
+except HAVNValidationError as e:
+    print(f"❌ Validation error: {e}")
+    # Handle validation errors (empty users list, max size exceeded, etc.)
+except HAVNAPIError as e:
+    print(f"❌ API error: {e}")
+    # Handle API errors
+```
+
+### 11. Bulk User Sync untuk Project Integration
+
+```python
+# Scenario: Sync semua users dalam project ke associate yang sama
+
+# Step 1: Sync project owner (create associate baru)
+owner_result = client.users.sync(
+    email="owner@shopeasy.com",
+    name="John Doe",
+    upline_code="HAVN-MJ-001",
+    create_associate=True
+)
+
+project_referral_code = owner_result.associate.referral_code if owner_result.associate else None
+print(f"Project referral_code: {project_referral_code}")
+
+# Step 2: Sync team members ke associate yang sama
+team_members = [
+    {"email": "admin@shopeasy.com", "name": "Jane Smith"},
+    {"email": "manager@shopeasy.com", "name": "Bob Johnson"},
+    {"email": "support@shopeasy.com", "name": "Alice Brown"},
+]
+
+if project_referral_code:
+    team_result = client.users.sync_bulk(
+        users=team_members,
+        referral_code=project_referral_code  # Link semua ke associate project
+    )
+    
+    print(f"Team members synced: {team_result.summary.success}")
+    print(f"All members linked to: {project_referral_code}")
 ```
 
 ---

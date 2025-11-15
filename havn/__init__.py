@@ -17,6 +17,9 @@ from .models import (
     TransactionResponse,
     UserSyncPayload,
     UserSyncResponse,
+    BulkUserSyncPayload,
+    BulkUserSyncResponse,
+    BulkSyncSummary,
     VoucherValidationPayload,
 )
 
@@ -35,5 +38,8 @@ __all__ = [
     "TransactionResponse",
     "UserSyncPayload",
     "UserSyncResponse",
+    "BulkUserSyncPayload",
+    "BulkUserSyncResponse",
+    "BulkSyncSummary",
     "VoucherValidationPayload",
 ]

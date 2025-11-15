@@ -207,6 +207,7 @@ Dokumentasi lengkap tersedia di folder `docs/`:
 - **[Quick Start Guide](docs/QUICKSTART.md)** - Mulai menggunakan SDK dalam 5 menit
 - **[API Reference](docs/API_REFERENCE.md)** - Dokumentasi lengkap semua methods dan parameters
 - **[Concepts Guide](docs/CONCEPTS.md)** - Memahami konsep dasar dan arsitektur SDK
+- **[Integration Flow](docs/INTEGRATION_FLOW.md)** - Panduan lengkap flow integrasi dengan bulk sync
 - **[Examples](docs/EXAMPLES.md)** - Contoh penggunaan lengkap berbagai skenario
 - **[Configuration Guide](docs/CONFIGURATION.md)** - Panduan konfigurasi lanjutan
 - **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** - Menyelesaikan masalah umum
@@ -214,36 +215,52 @@ Dokumentasi lengkap tersedia di folder `docs/`:
 ### 📖 Quick Links
 
 **Getting Started:**
+
 - [Installation & Setup](docs/QUICKSTART.md#installation)
 - [Basic Setup](docs/QUICKSTART.md#basic-setup)
 - [Your First Transaction](docs/QUICKSTART.md#your-first-transaction)
 
 **Core Concepts:**
+
 - [Authentication](docs/CONCEPTS.md#authentication)
 - [Webhooks vs API](docs/CONCEPTS.md#webhooks-vs-api)
 - [Error Handling](docs/CONCEPTS.md#error-handling)
 - [Test Mode](docs/CONCEPTS.md#test-mode)
 
 **Examples:**
+
 - [Transaction Examples](docs/EXAMPLES.md#transaction-examples)
 - [User Sync Examples](docs/EXAMPLES.md#user-sync-examples)
+- [Bulk User Sync Examples](docs/EXAMPLES.md#bulk-user-sync-basic)
 - [Voucher Validation Examples](docs/EXAMPLES.md#voucher-validation-examples)
 - [Error Handling Examples](docs/EXAMPLES.md#error-handling-examples)
 
+**Integration Flow:**
+
+- [Complete Integration Flow](docs/INTEGRATION_FLOW.md#complete-integration-flow)
+- [Project Creation](docs/INTEGRATION_FLOW.md#1-project-creation)
+- [User Sync ke HAVN](docs/INTEGRATION_FLOW.md#2-user-sync-ke-havn)
+- [Bulk User Sync](docs/INTEGRATION_FLOW.md#bulk-user-sync-sync-multiple-users-dalam-project)
+- [Payment/Transaction](docs/INTEGRATION_FLOW.md#3-paymenttransaction)
+
 **API Reference:**
+
 - [HAVNClient](docs/API_REFERENCE.md#havnclient)
 - [TransactionWebhook](docs/API_REFERENCE.md#transactionwebhook)
 - [UserSyncWebhook](docs/API_REFERENCE.md#usersyncwebhook)
+- [UserSyncWebhook.sync_bulk()](docs/API_REFERENCE.md#sync_bulk) - Bulk user sync
 - [VoucherWebhook](docs/API_REFERENCE.md#voucherwebhook)
 - [Models](docs/API_REFERENCE.md#models)
 - [Exceptions](docs/API_REFERENCE.md#exceptions)
 
 **Configuration:**
+
 - [Environment Variables](docs/CONFIGURATION.md#environment-variables)
 - [Custom Configuration](docs/CONFIGURATION.md#programmatic-configuration)
 - [Multi-Environment Setup](docs/CONFIGURATION.md#multi-environment-setup)
 
 **Troubleshooting:**
+
 - [Common Errors](docs/TROUBLESHOOTING.md#common-errors)
 - [Authentication Issues](docs/TROUBLESHOOTING.md#authentication-issues)
 - [Network Issues](docs/TROUBLESHOOTING.md#network-issues)
@@ -252,13 +269,17 @@ Dokumentasi lengkap tersedia di folder `docs/`:
 ### 🚀 Quick Reference
 
 **Client Methods:**
+
 - `client.transactions.send(**kwargs)` - Send transaction
 - `client.users.sync(**kwargs)` - Sync user data
+- `client.users.sync_bulk(**kwargs)` - Bulk sync multiple users
 - `client.vouchers.validate(**kwargs)` - Validate voucher
 
 **Response Models:**
+
 - `TransactionResponse` - Transaction webhook response dengan commissions
 - `UserSyncResponse` - User sync webhook response dengan user dan associate data
+- `BulkUserSyncResponse` - Bulk user sync response dengan summary statistics
 - Voucher validation mengembalikan `bool` (True jika valid)
 
 Lihat [API Reference](docs/API_REFERENCE.md) untuk dokumentasi lengkap.
@@ -320,6 +341,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Local Documentation**: Check folder `docs/` untuk dokumentasi lengkap
 - **Quick Start**: [docs/QUICKSTART.md](docs/QUICKSTART.md)
 - **API Reference**: [docs/API_REFERENCE.md](docs/API_REFERENCE.md)
+- **Integration Flow**: [docs/INTEGRATION_FLOW.md](docs/INTEGRATION_FLOW.md)
 - **Examples**: [docs/EXAMPLES.md](docs/EXAMPLES.md)
 - **Troubleshooting**: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 
@@ -333,6 +355,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ### 🆘 Common Issues
 
 Jika mengalami masalah, lihat [Troubleshooting Guide](docs/TROUBLESHOOTING.md) untuk:
+
 - Authentication errors
 - Network issues
 - Validation errors

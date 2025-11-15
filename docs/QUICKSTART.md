@@ -225,6 +225,26 @@ with HAVNClient(api_key="...", webhook_secret="...") as client:
 # Session ditutup otomatis
 ```
 
+## Bulk User Sync
+
+Sync multiple users dalam satu request menggunakan `sync_bulk()`:
+
+```python
+# Sync multiple users
+result = client.users.sync_bulk(
+    users=[
+        {"email": "user1@example.com", "name": "John Doe"},
+        {"email": "user2@example.com", "name": "Jane Smith"},
+    ],
+    upline_code="HAVN-MJ-001"
+)
+
+print(f"Success: {result.summary.success}/{result.summary.total}")
+print(f"Referral code: {result.referral_code}")
+```
+
+Untuk batch processing dan link multiple users ke associate yang sama, lihat [Examples](EXAMPLES.md) dan [Integration Flow](INTEGRATION_FLOW.md).
+
 ## Next Steps
 
 Setelah menguasai dasar-dasar:
@@ -232,12 +252,13 @@ Setelah menguasai dasar-dasar:
 1. **📖 Baca Dokumentasi Lengkap**:
 
    - [Concepts Guide](CONCEPTS.md) - Memahami konsep dasar SDK
-   - [API Reference](API_REFERENCE.md) - Dokumentasi lengkap semua methods
+   - [API Reference](API_REFERENCE.md) - Dokumentasi lengkap semua methods termasuk bulk sync
    - [Configuration Guide](CONFIGURATION.md) - Panduan konfigurasi lanjutan
 
 2. **💻 Lihat Contoh Penggunaan**:
 
-   - [Examples](EXAMPLES.md) - Contoh lengkap berbagai skenario
+   - [Examples](EXAMPLES.md) - Contoh lengkap berbagai skenario termasuk bulk sync
+   - [Integration Flow](INTEGRATION_FLOW.md) - Panduan integrasi lengkap dengan bulk sync
    - [Examples Directory](../examples/) - Contoh code yang bisa di-run
 
 3. **🔧 Advanced Topics**:

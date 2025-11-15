@@ -15,7 +15,12 @@ def use_context_manager():
 
     # Client will automatically close session on exit
     with HAVNClient() as client:
-        result = client.transactions.send(amount=10000, referral_code="HAVN-MJ-001")
+        result = client.transactions.send(
+            amount=10000,
+            payment_gateway_transaction_id="stripe_001",
+            customer_email="customer@example.com",
+            referral_code="HAVN-MJ-001",
+        )
         print(f"✅ Transaction: {result.transaction.transaction_id}")
 
     print("✅ Client session closed automatically\n")
@@ -50,11 +55,26 @@ def batch_transactions():
 
     client = HAVNClient()
 
-    # List of transactions to send
+    # List of transactions to send (with required fields)
     transactions = [
-        {"amount": 5000, "referral_code": "HAVN-MJ-001", "customer_id": "CUST001"},
-        {"amount": 7500, "referral_code": "HAVN-MJ-001", "customer_id": "CUST002"},
-        {"amount": 10000, "referral_code": "HAVN-MJ-002", "customer_id": "CUST003"},
+        {
+            "amount": 5000,
+            "payment_gateway_transaction_id": "stripe_001",
+            "customer_email": "customer1@example.com",
+            "referral_code": "HAVN-MJ-001",
+        },
+        {
+            "amount": 7500,
+            "payment_gateway_transaction_id": "stripe_002",
+            "customer_email": "customer2@example.com",
+            "referral_code": "HAVN-MJ-001",
+        },
+        {
+            "amount": 10000,
+            "payment_gateway_transaction_id": "stripe_003",
+            "customer_email": "customer3@example.com",
+            "referral_code": "HAVN-MJ-002",
+        },
     ]
 
     results = []
@@ -105,25 +125,23 @@ def transaction_with_all_fields():
         result = client.transactions.send(
             # Required
             amount=10000,  # $100.00 in cents
+            payment_gateway_transaction_id="PG123456789",
+            customer_email="customer@example.com",
             # Optional
             referral_code="HAVN-MJ-001",
             promo_code="VOUCHER123",
             currency="USD",
             customer_type="NEW_CUSTOMER",
             subtotal_transaction=12000,  # Before discount
-            acquisition_method="VOUCHER",
             custom_fields={
                 "order_id": "ORD123456",
                 "payment_method": "credit_card",
                 "customer_segment": "premium",
             },
             invoice_id="INV-2024-001",
-            customer_id="CUST123",
-            customer_email="customer@example.com",
             transaction_type="SUBSCRIPTION",
             description="Monthly subscription renewal",
-            payment_gateway_transaction_id="PG123456789",
-            is_recurring=True,
+            # acquisition_method akan auto-determined sebagai REFERRAL_VOUCHER (karena ada promo_code)
         )
 
         print("✅ Transaction with all fields successful!")

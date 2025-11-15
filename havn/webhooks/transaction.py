@@ -37,6 +37,8 @@ class TransactionWebhook:
     def send(
         self,
         amount: int,
+        payment_gateway_transaction_id: str,
+        customer_email: str,
         referral_code: Optional[str] = None,
         promo_code: Optional[str] = None,
         currency: str = "USD",
@@ -45,12 +47,8 @@ class TransactionWebhook:
         acquisition_method: Optional[str] = None,
         custom_fields: Optional[Dict[str, Any]] = None,
         invoice_id: Optional[str] = None,
-        customer_id: Optional[str] = None,
-        customer_email: Optional[str] = None,
         transaction_type: Optional[str] = None,
         description: Optional[str] = None,
-        payment_gateway_transaction_id: Optional[str] = None,
-        is_recurring: Optional[bool] = None,
         auto_convert: bool = True,
     ) -> TransactionResponse:
         """
@@ -71,6 +69,10 @@ class TransactionWebhook:
                 - If currency="USD": amount in USD cents
                 - If currency != "USD" and auto_convert=True: amount in source currency's smallest unit
                 - If currency != "USD" and auto_convert=False: amount in USD cents (conversion handled by backend)
+            payment_gateway_transaction_id: Payment gateway transaction ID (required)
+                - Must be non-empty string
+                - Max 200 characters
+            customer_email: Customer email (required, valid email format)
             referral_code: Associate referral code (optional)
             promo_code: Voucher code (HAVN or local).
                 - If HAVN voucher (starts with "HAVN-"): will be sent to API (referral_code + promo_code)
@@ -79,15 +81,15 @@ class TransactionWebhook:
             customer_type: NEW_CUSTOMER or RECURRING (default: NEW_CUSTOMER)
             subtotal_transaction: Original amount before discount (optional)
                 - Same currency rules as amount
-            acquisition_method: VOUCHER, REFERRAL, or REFERRAL_VOUCHER (optional)
+            acquisition_method: REFERRAL or REFERRAL_VOUCHER (optional, auto-determined)
+                - REFERRAL_VOUCHER: Jika ada promo_code (voucher)
+                - REFERRAL: Jika hanya ada referral_code
+                - Tidak ada "VOUCHER" standalone (voucher selalu dikaitkan dengan referral)
+                - Jika tidak disediakan, akan auto-determined dari promo_code/referral_code
             custom_fields: Custom metadata (max 3 entries) (optional)
             invoice_id: External invoice ID (optional)
-            customer_id: External customer ID (optional)
-            customer_email: Customer email (optional)
-            transaction_type: Transaction type (optional)
+            transaction_type: Transaction type (optional, untuk logging)
             description: Transaction description (optional)
-            payment_gateway_transaction_id: Payment gateway transaction ID (optional)
-            is_recurring: Whether transaction is recurring (optional)
             auto_convert: Whether to automatically convert non-USD amounts to USD cents (default: True)
                 - If True: SDK converts to USD cents before sending
                 - If False: Amount sent as-is (backend will handle conversion)
@@ -100,37 +102,56 @@ class TransactionWebhook:
             HAVNAPIError: If API request fails or currency conversion fails
 
         Example:
-            >>> # Transaction with HAVN voucher (both referral_code and promo_code sent)
+            >>> # Transaction with HAVN voucher (acquisition_method auto-determined)
             >>> result = client.transactions.send(
             ...     amount=8000,
+            ...     payment_gateway_transaction_id="stripe_1234567890",
+            ...     customer_email="customer@example.com",
             ...     referral_code="HAVN-MJ-001",
             ...     promo_code="HAVN-AQNEO-S08-ABC123",  # HAVN voucher
             ...     currency="USD"
+            ...     # acquisition_method akan auto-determined sebagai REFERRAL_VOUCHER
             ... )
             >>>
             >>> # Transaction with local voucher (only referral_code sent)
             >>> result = client.transactions.send(
             ...     amount=8000,
+            ...     payment_gateway_transaction_id="midtrans_9876543210",
+            ...     customer_email="customer@example.com",
             ...     referral_code="HAVN-MJ-001",
             ...     promo_code="LOCAL123",  # Local voucher - not sent to HAVN
             ...     currency="USD"
+            ...     # acquisition_method akan auto-determined sebagai REFERRAL
             ... )
             >>>
             >>> # Transaction with auto-conversion (IDR to USD)
             >>> result = client.transactions.send(
             ...     amount=150000,  # IDR rupiah
+            ...     payment_gateway_transaction_id="stripe_111222333",
+            ...     customer_email="customer@example.com",
             ...     currency="IDR",  # SDK auto-converts to USD cents
             ...     referral_code="HAVN-MJ-001"
+            ...     # acquisition_method akan auto-determined sebagai REFERRAL
             ... )
             >>>
-            >>> # Transaction with auto-conversion disabled (let backend handle)
+            >>> # Recurring transaction (customer_type="RECURRING")
             >>> result = client.transactions.send(
-            ...     amount=10000,  # Already in USD cents
-            ...     currency="IDR",  # Info only, backend will convert
-            ...     auto_convert=False,
+            ...     amount=10000,
+            ...     payment_gateway_transaction_id="stripe_444555666",
+            ...     customer_email="customer@example.com",
+            ...     customer_type="RECURRING",
             ...     referral_code="HAVN-MJ-001"
             ... )
         """
+        # Auto-determine acquisition_method if not provided (before voucher check)
+        if not acquisition_method:
+            if promo_code and is_havn_voucher_code(promo_code):
+                acquisition_method = "REFERRAL_VOUCHER"
+            elif referral_code:
+                acquisition_method = "REFERRAL"
+            else:
+                acquisition_method = "FAIL"  # Will be validated by backend
+
         # Determine if promo_code is HAVN voucher
         # Only send promo_code to HAVN if it's a HAVN voucher
         promo_code_to_send = None
@@ -182,25 +203,23 @@ class TransactionWebhook:
                     "If you want to send amount already in USD cents, set auto_convert=False."
                 )
 
-        # Build payload
+        # Build payload (required fields first)
         payload = TransactionPayload(
             amount=amount_to_send,
+            payment_gateway_transaction_id=payment_gateway_transaction_id,
+            customer_email=customer_email,
             referral_code=referral_code,
             promo_code=promo_code_to_send,  # Only HAVN vouchers are sent
             currency=currency_to_send,  # USD after conversion, or original if auto_convert=False
             customer_type=customer_type,
             subtotal_transaction=subtotal_to_send,
-            acquisition_method=acquisition_method,
+            acquisition_method=acquisition_method,  # Auto-determined if not provided
             custom_fields=custom_fields_with_metadata
             if custom_fields_with_metadata
             else None,
             invoice_id=invoice_id,
-            customer_id=customer_id,
-            customer_email=customer_email,
             transaction_type=transaction_type,
             description=description,
-            payment_gateway_transaction_id=payment_gateway_transaction_id,
-            is_recurring=is_recurring,
         )
 
         # Validate payload

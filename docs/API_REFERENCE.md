@@ -172,12 +172,10 @@ client.transactions.send(
     acquisition_method: Optional[str] = None,
     custom_fields: Optional[Dict[str, Any]] = None,
     invoice_id: Optional[str] = None,
-    customer_id: Optional[str] = None,
     customer_email: Optional[str] = None,
     transaction_type: Optional[str] = None,
     description: Optional[str] = None,
     payment_gateway_transaction_id: Optional[str] = None,
-    is_recurring: Optional[bool] = None,
 ) -> TransactionResponse
 ```
 
@@ -186,20 +184,18 @@ client.transactions.send(
 | Parameter                        | Type   | Required | Default          | Description                                                                                                                                                                                                                                                                                     |
 | -------------------------------- | ------ | -------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `amount`                         | `int`  | ✅ Yes   | -                | Final transaction amount<br>- Jika `currency="USD"`: amount dalam USD cents<br>- Jika `currency != "USD"` dan `auto_convert=True`: amount dalam source currency's smallest unit<br>- Jika `currency != "USD"` dan `auto_convert=False`: amount dalam USD cents (backend akan handle conversion) |
+| `payment_gateway_transaction_id` | `str`  | ✅ Yes   | -                | Payment gateway transaction ID (required, non-empty, max 200 characters)                                                                                                                                                                                                                        |
+| `customer_email`                 | `str`  | ✅ Yes   | -                | Customer email (required, valid email format)                                                                                                                                                                                                                                                   |
 | `referral_code`                  | `str`  | No       | `None`           | Associate referral code                                                                                                                                                                                                                                                                         |
 | `promo_code`                     | `str`  | No       | `None`           | Voucher code (HAVN atau local)                                                                                                                                                                                                                                                                  |
 | `currency`                       | `str`  | No       | `"USD"`          | Currency code (ISO 4217, 3 uppercase letters)                                                                                                                                                                                                                                                   |
 | `customer_type`                  | `str`  | No       | `"NEW_CUSTOMER"` | `"NEW_CUSTOMER"` atau `"RECURRING"`                                                                                                                                                                                                                                                             |
 | `subtotal_transaction`           | `int`  | No       | `None`           | Original amount sebelum discount (mengikuti aturan currency yang sama dengan `amount`)                                                                                                                                                                                                          |
-| `acquisition_method`             | `str`  | No       | `None`           | `"VOUCHER"`, `"REFERRAL"`, atau `"REFERRAL_VOUCHER"`                                                                                                                                                                                                                                            |
+| `acquisition_method`             | `str`  | No       | `None`           | `"REFERRAL"` atau `"REFERRAL_VOUCHER"` (optional, auto-determined)<br>- `REFERRAL_VOUCHER`: Jika ada `promo_code` (voucher)<br>- `REFERRAL`: Jika hanya ada `referral_code`<br>- Tidak ada `"VOUCHER"` standalone (voucher selalu dikaitkan dengan referral)                                    |
 | `custom_fields`                  | `dict` | No       | `None`           | Custom metadata (max 3 entries, string/number/boolean values)                                                                                                                                                                                                                                   |
 | `invoice_id`                     | `str`  | No       | `None`           | External invoice ID                                                                                                                                                                                                                                                                             |
-| `customer_id`                    | `str`  | No       | `None`           | External customer ID                                                                                                                                                                                                                                                                            |
-| `customer_email`                 | `str`  | No       | `None`           | Customer email                                                                                                                                                                                                                                                                                  |
-| `transaction_type`               | `str`  | No       | `None`           | Transaction type                                                                                                                                                                                                                                                                                |
+| `transaction_type`               | `str`  | No       | `None`           | Transaction type (untuk logging)                                                                                                                                                                                                                                                                |
 | `description`                    | `str`  | No       | `None`           | Transaction description                                                                                                                                                                                                                                                                         |
-| `payment_gateway_transaction_id` | `str`  | No       | `None`           | Payment gateway transaction ID                                                                                                                                                                                                                                                                  |
-| `is_recurring`                   | `bool` | No       | `None`           | Apakah transaction adalah recurring                                                                                                                                                                                                                                                             |
 | `auto_convert`                   | `bool` | No       | `True`           | Apakah auto-convert non-USD amounts ke USD cents<br>- `True`: SDK convert ke USD cents sebelum kirim (backend akan verify dengan exact match)<br>- `False`: Amount dikirim as-is (backend akan handle conversion)                                                                               |
 
 #### Returns
@@ -269,7 +265,6 @@ result = client.transactions.send(
         "customer_segment": "premium"
     },
     invoice_id="INV-2024-001",
-    customer_id="CUST-123",
     customer_email="customer@example.com"
 )
 ```
@@ -311,7 +306,6 @@ result = client.transactions.send(
     referral_code="HAVN-MJ-001",
     currency="USD",
     customer_type="RECURRING",
-    is_recurring=True,
     description="Monthly subscription"
 )
 ```
@@ -1062,20 +1056,18 @@ Payload untuk transaction webhook.
 **Attributes:**
 
 - `amount` (`int`): Final transaction amount dalam cents
+- `payment_gateway_transaction_id` (`str`): Payment gateway transaction ID (required, non-empty, max 200 characters)
+- `customer_email` (`str`): Customer email (required, valid email format)
 - `referral_code` (`Optional[str]`): Associate referral code
 - `promo_code` (`Optional[str]`): Voucher code
 - `currency` (`str`): Currency code (default: "USD")
 - `customer_type` (`str`): "NEW_CUSTOMER" atau "RECURRING" (default: "NEW_CUSTOMER")
 - `subtotal_transaction` (`Optional[int]`): Original amount sebelum discount
-- `acquisition_method` (`Optional[str]`): "VOUCHER", "REFERRAL", atau "REFERRAL_VOUCHER"
+- `acquisition_method` (`Optional[str]`): "REFERRAL" atau "REFERRAL_VOUCHER" (optional, auto-determined from promo_code/referral_code)
 - `custom_fields` (`Optional[Dict[str, Any]]`): Custom metadata (max 3 entries)
 - `invoice_id` (`Optional[str]`): External invoice ID
-- `customer_id` (`Optional[str]`): External customer ID
-- `customer_email` (`Optional[str]`): Customer email
-- `transaction_type` (`Optional[str]`): Transaction type
+- `transaction_type` (`Optional[str]`): Transaction type (untuk logging)
 - `description` (`Optional[str]`): Transaction description
-- `payment_gateway_transaction_id` (`Optional[str]`): Payment gateway transaction ID
-- `is_recurring` (`Optional[bool]`): Apakah transaction adalah recurring
 
 #### TransactionData
 

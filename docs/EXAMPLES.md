@@ -110,7 +110,6 @@ result = client.transactions.send(
         "customer_segment": "premium"
     },
     invoice_id="INV-2024-001",
-    customer_id="CUST-123",
     customer_email="customer@example.com"
 )
 
@@ -126,7 +125,6 @@ result = client.transactions.send(
     referral_code="HAVN-MJ-001",
     currency="USD",
     customer_type="RECURRING",
-    is_recurring=True,
     description="Monthly subscription"
 )
 

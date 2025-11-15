@@ -13,20 +13,18 @@ class TransactionPayload:
 
     Attributes:
         amount: Final transaction amount in cents (required)
+        payment_gateway_transaction_id: Payment gateway transaction ID (required)
+        customer_email: Customer email (required, valid email format)
         referral_code: Associate referral code (optional)
         promo_code: Voucher code (optional)
         currency: Currency code (default: USD)
         customer_type: NEW_CUSTOMER or RECURRING (default: NEW_CUSTOMER)
         subtotal_transaction: Original amount before discount (optional)
-        acquisition_method: VOUCHER, REFERRAL, or REFERRAL_VOUCHER (auto-determined)
+        acquisition_method: REFERRAL or REFERRAL_VOUCHER (optional, auto-determined from promo_code/referral_code)
         custom_fields: Custom metadata dict (max 3 entries) (optional)
         invoice_id: External invoice ID (optional)
-        customer_id: External customer ID (optional)
-        customer_email: Customer email (optional)
-        transaction_type: Transaction type (optional)
+        transaction_type: Transaction type (optional, untuk logging)
         description: Transaction description (optional)
-        payment_gateway_transaction_id: Payment gateway transaction ID (optional)
-        is_recurring: Whether transaction is recurring (optional)
 
     Example:
         >>> payload = TransactionPayload(
@@ -38,20 +36,20 @@ class TransactionPayload:
     """
 
     amount: int
+    payment_gateway_transaction_id: str  # Required: Payment gateway transaction ID
+    customer_email: str  # Required: Customer email
     referral_code: Optional[str] = None
     promo_code: Optional[str] = None
     currency: str = "USD"
     customer_type: str = "NEW_CUSTOMER"
     subtotal_transaction: Optional[int] = None
-    acquisition_method: Optional[str] = None
+    acquisition_method: Optional[str] = (
+        None  # Optional: Auto-determined from promo_code/referral_code
+    )
     custom_fields: Optional[Dict[str, Any]] = None
     invoice_id: Optional[str] = None
-    customer_id: Optional[str] = None
-    customer_email: Optional[str] = None
     transaction_type: Optional[str] = None
     description: Optional[str] = None
-    payment_gateway_transaction_id: Optional[str] = None
-    is_recurring: Optional[bool] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary, removing None values"""
@@ -96,6 +94,40 @@ class TransactionPayload:
             if self.subtotal_transaction < self.amount:
                 raise ValueError(
                     "subtotal_transaction must be greater than or equal to amount"
+                )
+
+        # Validate payment_gateway_transaction_id (required)
+        if (
+            not self.payment_gateway_transaction_id
+            or not self.payment_gateway_transaction_id.strip()
+        ):
+            raise ValueError(
+                "payment_gateway_transaction_id is required and cannot be empty"
+            )
+
+        if len(self.payment_gateway_transaction_id) > 200:
+            raise ValueError(
+                "payment_gateway_transaction_id cannot exceed 200 characters"
+            )
+
+        # Validate customer_email (required, non-empty, valid format)
+        if not self.customer_email or not self.customer_email.strip():
+            raise ValueError("customer_email is required and cannot be empty")
+
+        from ..utils.validators import validate_email
+
+        try:
+            validate_email(self.customer_email)
+        except ValueError as e:
+            raise ValueError(f"Invalid customer_email format: {e}")
+
+        # Validate acquisition_method (optional, but must be valid if provided)
+        if self.acquisition_method:
+            valid_methods = ["REFERRAL", "REFERRAL_VOUCHER"]
+            if self.acquisition_method.upper() not in valid_methods:
+                raise ValueError(
+                    f"Invalid acquisition_method: {self.acquisition_method}. "
+                    f"Must be one of: {', '.join(valid_methods)}"
                 )
 
 
@@ -194,8 +226,6 @@ class TransactionResponse:
             success=data.get("success", False),
             message=data.get("message", ""),
             transaction=TransactionData.from_dict(transaction_data),
-            commissions=[
-                CommissionData.from_dict(c) for c in commissions_data
-            ],
+            commissions=[CommissionData.from_dict(c) for c in commissions_data],
             raw_response=data,
         )

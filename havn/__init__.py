@@ -23,7 +23,7 @@ from .models import (
     VoucherValidationPayload,
 )
 
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 __author__ = "Bagus"
 __email__ = "bagus@intelove.com"
 

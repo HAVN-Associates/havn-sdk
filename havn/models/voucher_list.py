@@ -28,8 +28,13 @@ def is_havn_voucher_code(code: str) -> bool:
         >>> is_havn_voucher_code("havn-test")
         False  # Case sensitive for prefix check
     """
-    if not code or not isinstance(code, str):
+    # Early return for empty/invalid input (performance optimization)
+    if not code:
         return False
+    # Use isinstance check for type safety
+    if not isinstance(code, str):
+        return False
+    # Case-insensitive check (HAVN prefix is always uppercase)
     return code.upper().startswith("HAVN-")
 
 
@@ -103,11 +108,14 @@ class VoucherData:
         Create VoucherData from dictionary
 
         Automatically detects if voucher is from HAVN based on code format.
+        Performance: Creates new dict to avoid mutating input (best practice).
         """
+        # Create copy to avoid mutating input dict (immutability best practice)
+        voucher_data = dict(data)
         # Auto-detect HAVN voucher from code format
-        code = data.get("code", "")
-        data["is_havn_voucher"] = is_havn_voucher_code(code)
-        return cls(**data)
+        code = voucher_data.get("code", "")
+        voucher_data["is_havn_voucher"] = is_havn_voucher_code(code)
+        return cls(**voucher_data)
 
 
 @dataclass
@@ -158,19 +166,36 @@ class VoucherListResponse:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "VoucherListResponse":
-        """Create VoucherListResponse from API response"""
-        # Extract data and pagination
-        response_data = data.get("data", {})
-        vouchers_list = response_data.get("data", [])
-        pagination_dict = response_data.get("pagination")
+        """
+        Create VoucherListResponse from API response
 
-        # Convert vouchers
+        Handles backend response format:
+        {
+            "success": true,
+            "message": "Success",
+            "data": [...],  # List directly at root level
+            "pagination": {...}  # Pagination at root level
+        }
+        """
+        # Extract vouchers list (directly from root "data" key)
+        vouchers_list = data.get("data", [])
+        # Type safety: ensure it's a list (early validation for performance)
+        if not isinstance(vouchers_list, list):
+            vouchers_list = []
+
+        # Extract pagination (directly from root "pagination" key)
+        pagination_dict = data.get("pagination")
+
+        # Convert vouchers using list comprehension (optimal performance)
+        # List comprehension is faster than map() or loops for this use case
         vouchers = [VoucherData.from_dict(v) for v in vouchers_list]
 
-        # Convert pagination
-        pagination = None
-        if pagination_dict:
-            pagination = VoucherListPagination.from_dict(pagination_dict)
+        # Lazy evaluation: only convert pagination if present (performance optimization)
+        pagination = (
+            VoucherListPagination.from_dict(pagination_dict)
+            if pagination_dict
+            else None
+        )
 
         return cls(
             success=data.get("success", True),

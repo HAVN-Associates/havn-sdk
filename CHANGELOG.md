@@ -51,6 +51,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive examples
 
 ## [Unreleased]
+## [1.0.8] - 2025-11-16
+
+### Changed
+- Auto-bumped version to 1.0.8
+
 ## [1.0.7] - 2025-11-15
 
 ### Changed

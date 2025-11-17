@@ -1,2 +1,4 @@
 Bagus Erwanto <mr.volumee@gmail.com> bagus erwanto <mr.volumee@gmail.com>
 Bagus Erwanto <mr.volumee@gmail.com> Bagus erwanto <mr.volumee@gmail.com>
+# Exclude bots from contributors
+nobody <noreply@github.com> factory-droid[bot] <138933559+factory-droid[bot]@users.noreply.github.com>

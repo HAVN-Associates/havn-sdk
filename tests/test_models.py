@@ -16,6 +16,8 @@ class TestTransactionPayload:
         """Test valid transaction payload"""
         payload = TransactionPayload(
             amount=10000,
+            payment_gateway_transaction_id="txn_12345",
+            customer_email="customer@example.com",
             referral_code="HAVN-MJ-001",
             currency="USD",
         )
@@ -23,13 +25,23 @@ class TestTransactionPayload:
 
     def test_invalid_amount_negative(self):
         """Test validation fails for negative amount"""
-        payload = TransactionPayload(amount=-100, referral_code="HAVN-MJ-001")
+        payload = TransactionPayload(
+            amount=-100,
+            payment_gateway_transaction_id="txn_12345",
+            customer_email="customer@example.com",
+            referral_code="HAVN-MJ-001"
+        )
         with pytest.raises(ValueError, match="Amount must be greater than 0"):
             payload.validate()
 
     def test_invalid_currency(self):
         """Test validation fails for invalid currency"""
-        payload = TransactionPayload(amount=10000, currency="XYZ")
+        payload = TransactionPayload(
+            amount=10000,
+            payment_gateway_transaction_id="txn_12345",
+            customer_email="customer@example.com",
+            currency="XYZ"
+        )
         with pytest.raises(ValueError, match="Unsupported currency code"):
             payload.validate()
 
@@ -37,6 +49,8 @@ class TestTransactionPayload:
         """Test validation fails for invalid customer type"""
         payload = TransactionPayload(
             amount=10000,
+            payment_gateway_transaction_id="txn_12345",
+            customer_email="customer@example.com",
             customer_type="INVALID",
         )
         with pytest.raises(ValueError, match="Invalid customer_type"):
@@ -46,6 +60,8 @@ class TestTransactionPayload:
         """Test to_dict removes None values"""
         payload = TransactionPayload(
             amount=10000,
+            payment_gateway_transaction_id="txn_12345",
+            customer_email="customer@example.com",
             referral_code="HAVN-MJ-001",
             promo_code=None,
         )

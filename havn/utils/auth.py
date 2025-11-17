@@ -38,6 +38,7 @@ def build_auth_headers(
     payload: Optional[Dict[str, Any]] = None,
     api_key: str = None,
     webhook_secret: str = None,
+    content_type: str = "application/json",
 ) -> Dict[str, str]:
     """
     Build authentication headers for API request
@@ -75,7 +76,7 @@ def build_auth_headers(
     signature = calculate_hmac_signature(signature_payload, webhook_secret)
 
     return {
-        "Content-Type": "application/json",
+        "Content-Type": content_type,
         "Accept": "application/json",
         "X-API-Key": api_key,
         "X-Signature": signature,

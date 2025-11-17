@@ -133,13 +133,28 @@ class CurrencyConverter:
             cache_expires_at = fetched_at + timedelta(hours=self.cache_duration_hours)
 
             if datetime.now() < cache_expires_at:
-                # Cache is still valid
-                return cached["rate"]
+                # Cache is still valid - validate rate before returning
+                cached_rate = cached["rate"]
+                if self._validate_exchange_rate(currency, cached_rate):
+                    return cached_rate
+                else:
+                    # Invalid cached rate, remove from cache and fetch fresh
+                    import logging
+
+                    logging.warning(
+                        f"Invalid cached exchange rate for {currency}: {cached_rate}. "
+                        "Removing from cache and fetching fresh rate.",
+                        extra={
+                            "currency": currency,
+                            "cached_rate": float(cached_rate),
+                        },
+                    )
+                    del self._rate_cache[currency]
 
         # Cache expired or not found, fetch from API
         rate = self._fetch_exchange_rate_from_api(currency)
         if rate:
-            # Update cache
+            # Update cache only if rate is valid (already validated in _fetch_exchange_rate_from_api)
             self._rate_cache[currency] = {
                 "rate": rate,
                 "fetched_at": datetime.now(),
@@ -155,7 +170,11 @@ class CurrencyConverter:
             currency: Target currency code
 
         Returns:
-            Exchange rate as Decimal, or None if fetch failed
+            Exchange rate as Decimal, or None if fetch failed or rate is invalid
+
+        Note:
+            Validates exchange rate against expected ranges to catch API errors.
+            Common rates: IDR ~15000, JPY ~150, EUR ~0.85, GBP ~0.75
         """
         try:
             response = requests.get(
@@ -165,10 +184,46 @@ class CurrencyConverter:
             data = response.json()
 
             # API returns rates as: {"rates": {"IDR": 15000, "EUR": 0.85, ...}}
-            if "rates" in data and currency in data["rates"]:
-                rate = Decimal(str(data["rates"][currency]))
+            # OR: {"data": {"rates": {...}}} (different API formats)
+            rates_data = data.get("rates") or data.get("data", {}).get("rates", {})
+
+            if currency in rates_data:
+                rate_value = rates_data[currency]
+                rate = Decimal(str(rate_value))
+
+                # Validate rate is reasonable (catch API errors or wrong format)
+                if not self._validate_exchange_rate(currency, rate):
+                    import logging
+
+                    logging.warning(
+                        f"Exchange rate for {currency} seems invalid: {rate}. "
+                        f"Expected range based on currency type. Skipping cache.",
+                        extra={
+                            "currency": currency,
+                            "rate": float(rate),
+                            "api_url": self.exchange_rate_api_url,
+                            "response_format": "rates"
+                            if "rates" in data
+                            else "data.rates",
+                        },
+                    )
+                    return None
+
                 return rate
 
+            # Log if currency not found
+            import logging
+
+            logging.warning(
+                f"Currency {currency} not found in API response",
+                extra={
+                    "currency": currency,
+                    "available_currencies": list(rates_data.keys())[:10]
+                    if rates_data
+                    else [],
+                    "api_url": self.exchange_rate_api_url,
+                },
+            )
             return None
 
         except (requests.exceptions.RequestException, KeyError, ValueError) as e:
@@ -180,6 +235,49 @@ class CurrencyConverter:
                 exc_info=False,
             )
             return None
+
+    def _validate_exchange_rate(self, currency: str, rate: Decimal) -> bool:
+        """
+        Validate exchange rate is within reasonable range
+
+        Args:
+            currency: Currency code
+            rate: Exchange rate to validate
+
+        Returns:
+            True if rate is valid, False otherwise
+        """
+        # Expected rate ranges (1 USD = X currency)
+        # These are rough ranges to catch obvious errors
+        rate_ranges = {
+            "IDR": (1000, 50000),  # Usually ~15000
+            "JPY": (50, 300),  # Usually ~150
+            "KRW": (1000, 5000),  # Usually ~1300
+            "VND": (20000, 50000),  # Usually ~25000
+            "EUR": (0.5, 1.5),  # Usually ~0.85
+            "GBP": (0.5, 1.5),  # Usually ~0.75
+            "AUD": (0.5, 2.0),  # Usually ~1.5
+            "CAD": (0.5, 2.0),  # Usually ~1.3
+            "SGD": (0.8, 2.0),  # Usually ~1.35
+            "MYR": (3.0, 6.0),  # Usually ~4.5
+            "THB": (20, 60),  # Usually ~35
+            "PHP": (40, 80),  # Usually ~55
+            "INR": (60, 120),  # Usually ~83
+            "CNY": (5, 10),  # Usually ~7
+        }
+
+        currency_upper = currency.upper()
+        if currency_upper in rate_ranges:
+            min_rate, max_rate = rate_ranges[currency_upper]
+            if rate < Decimal(str(min_rate)) or rate > Decimal(str(max_rate)):
+                return False
+
+        # For currencies not in the list, basic sanity check:
+        # Rate should be positive and not extremely large/small
+        if rate <= Decimal("0") or rate > Decimal("1000000"):
+            return False
+
+        return True
 
     def convert_to_usd_cents(self, amount: int, from_currency: str) -> Dict[str, Any]:
         """

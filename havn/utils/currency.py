@@ -275,7 +275,7 @@ class CurrencyConverter:
         amount_target = amount_usd * rate
 
         # Convert to target currency's smallest unit
-        # Round to nearest unit
+        # Round to nearest integer for precision (important for large numbers like IDR)
         amount = int(round(amount_target))
 
         # Format currency string

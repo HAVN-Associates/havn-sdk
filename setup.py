@@ -56,7 +56,7 @@ setup(
             "isort>=5.10.0",
         ],
     },
-    keywords="havn, mlm, voucher, api, sdk, webhook, commission, referral",
+    keywords="havn mlm voucher api sdk webhook commission referral",
     include_package_data=True,
     zip_safe=False,
 )

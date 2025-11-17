@@ -17,7 +17,7 @@ if requirements_path.exists():
 
 setup(
     name="havn-sdk",
-    version="1.1.2",
+    version="1.1.3",
     author="Bagus",
     author_email="bagus@intelove.com",
     description="Official Python SDK for HAVN (Hierarchical Associate Voucher Network) API",
@@ -56,7 +56,7 @@ setup(
             "isort>=5.10.0",
         ],
     },
-    keywords="havn mlm voucher api sdk webhook commission referral",
+    keywords="havn, mlm, voucher, api, sdk, webhook, commission, referral",
     include_package_data=True,
     zip_safe=False,
 )

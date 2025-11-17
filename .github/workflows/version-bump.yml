@@ -51,6 +51,11 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Fetch all tags
+        run: |
+          git fetch --tags --force
+          echo "Fetched all tags"
+
       - name: Get current version
         id: current_version
         run: |
@@ -71,6 +76,26 @@ jobs:
 
           echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
           echo "✅ Current version detected: $CURRENT_VERSION"
+
+      - name: Get latest tag version
+        id: latest_tag
+        run: |
+          LATEST_TAG=$(git tag --sort=-version:refname | head -n 1 || echo "")
+
+          if [ -z "$LATEST_TAG" ]; then
+            echo "version=0.0.0" >> $GITHUB_OUTPUT
+            echo "ℹ️ No tags found, defaulting to 0.0.0"
+            exit 0
+          fi
+
+          CLEAN_TAG=${LATEST_TAG#v}
+          if ! echo "$CLEAN_TAG" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "❌ Latest tag $LATEST_TAG does not follow vX.Y.Z"
+            exit 1
+          fi
+
+          echo "version=$CLEAN_TAG" >> $GITHUB_OUTPUT
+          echo "✅ Latest tag detected: $CLEAN_TAG (from $LATEST_TAG)"
 
       - name: Determine version bump type
         id: bump_type
@@ -98,8 +123,24 @@ jobs:
       - name: Calculate new version
         id: new_version
         run: |
-          CURRENT="${{ steps.current_version.outputs.version }}"
+          FILE_VERSION="${{ steps.current_version.outputs.version }}"
+          TAG_VERSION="${{ steps.latest_tag.outputs.version }}"
           BUMP_TYPE="${{ steps.bump_type.outputs.type }}"
+
+          if [ -z "$TAG_VERSION" ]; then
+            TAG_VERSION="0.0.0"
+          fi
+
+          CURRENT=$(printf '%s\n%s\n' "$FILE_VERSION" "$TAG_VERSION" | sort -V | tail -n 1)
+
+          if [ -z "$CURRENT" ]; then
+            echo "❌ Failed to determine base version"
+            exit 1
+          fi
+
+          echo "ℹ️ Detected file version: $FILE_VERSION"
+          echo "ℹ️ Latest tag version: $TAG_VERSION"
+          echo "ℹ️ Using base version: $CURRENT"
 
           # Validate version format
           if ! echo "$CURRENT" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
@@ -140,14 +181,9 @@ jobs:
 
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "✅ Current version: $CURRENT"
+          echo "✅ Base version: $CURRENT"
           echo "✅ Bump type: $BUMP_TYPE"
           echo "✅ New version: $NEW_VERSION"
-
-      - name: Fetch all tags
-        run: |
-          git fetch --tags --force
-          echo "Fetched all tags"
 
       - name: Check if tag exists
         id: check_tag

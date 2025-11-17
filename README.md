@@ -1,31 +1,34 @@
 # HAVN Python SDK
 
-Official Python SDK for integrating with HAVN (Hierarchical Associate Voucher Network) API.
+SDK Python resmi untuk integrasi dengan HAVN (Hierarchical Associate Voucher Network) API.
 
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-## Features
+## Fitur
 
-- ✅ **Simple & Intuitive API** - Easy to use, Pythonic interface
-- ✅ **Automatic Authentication** - HMAC-SHA256 signature generation
-- ✅ **Type Hints** - Full type annotation support
-- ✅ **Retry Logic** - Built-in retry with exponential backoff
-- ✅ **Comprehensive Models** - Pydantic models with validation
-- ✅ **Error Handling** - Descriptive custom exceptions with rate limit support
-- ✅ **Test Mode** - Dry-run mode for testing without side effects
-- ✅ **Bulk Operations** - Bulk user sync untuk efficiency
-- ✅ **Role Management** - Support untuk owner role assignment
-- ✅ **Rate Limiting** - Automatic rate limit handling with retry logic
-- ✅ **Well Documented** - Extensive documentation and examples
+- ✅ **API Sederhana & Intuitif** - Mudah digunakan dengan interface Pythonic
+- ✅ **Autentikasi Otomatis** - HMAC-SHA256 signature generation otomatis
+- ✅ **Type Hints** - Dukungan penuh untuk type annotation
+- ✅ **Retry Logic** - Built-in retry dengan exponential backoff
+- ✅ **Model Lengkap** - Model dengan validasi otomatis
+- ✅ **Error Handling** - Custom exception dengan rate limit support
+- ✅ **Test Mode** - Mode dry-run untuk testing tanpa side effects
+- ✅ **Login Webhook** - User login dari SaaS company ke HAVN
+- ✅ **Bulk Operations** - Bulk user sync untuk efisiensi tinggi
+- ✅ **Role Management** - Support untuk owner dan partner role
+- ✅ **Rate Limiting** - Automatic rate limit handling dengan retry
+- ✅ **Currency Conversion** - Multi-currency support dengan auto-conversion
+- ✅ **Voucher Management** - Get, validate, dan combine vouchers
+- ✅ **Dokumentasi Lengkap** - Dokumentasi ekstensif dengan contoh kode
 
-## Installation
+## Instalasi
 
 ```bash
 pip install havn-sdk
 ```
 
-Or install from source:
+Atau install dari source:
 
 ```bash
 git clone https://github.com/havn/havn-python-sdk.git
@@ -38,47 +41,68 @@ pip install -e .
 ```python
 from havn import HAVNClient
 
-# Initialize client
+# Inisialisasi client
 client = HAVNClient(
     api_key="your_api_key_here",
     webhook_secret="your_webhook_secret_here",
-    base_url="https://api.havn.com"  # Optional, defaults to production
+    base_url="https://api.havn.com"  # Opsional, default ke production
 )
 
-# Send a transaction
+# Kirim transaksi
 result = client.transactions.send(
-    amount=10000,  # $100.00 in cents
+    amount=10000,  # $100.00 dalam cents
     referral_code="HAVN-MJ-001",
     currency="USD",
     customer_type="NEW_CUSTOMER"
 )
 
 print(f"Transaction ID: {result.transaction.transaction_id}")
-print(f"Commissions: {len(result.commissions)} levels distributed")
+print(f"Komisi: {len(result.commissions)} level terdistribusi")
 ```
 
-## Usage Examples
+## Contoh Penggunaan
 
-### Send Transaction
+### 1. Login User
 
 ```python
-# Simple transaction
+# Login user dari SaaS company ke HAVN (via webhook)
+redirect_url = client.auth.login(email="user@example.com")
+
+# Integrasi dengan Flask
+from flask import redirect
+return redirect(redirect_url)
+
+# Integrasi dengan Django
+from django.http import HttpResponseRedirect
+return HttpResponseRedirect(redirect_url)
+
+# Integrasi dengan FastAPI
+from fastapi.responses import RedirectResponse
+return RedirectResponse(url=redirect_url)
+
+# User akan di-redirect ke HAVN frontend dan otomatis login
+```
+
+### 2. Kirim Transaksi
+
+```python
+# Transaksi sederhana
 result = client.transactions.send(
     amount=10000,
     referral_code="HAVN-MJ-001"
 )
 
-# Transaction with voucher
+# Transaksi dengan voucher
 result = client.transactions.send(
-    amount=8000,  # After discount
-    subtotal_transaction=10000,  # Before discount
+    amount=8000,  # Setelah diskon
+    subtotal_transaction=10000,  # Sebelum diskon
     promo_code="VOUCHER123",
     referral_code="HAVN-MJ-001",
     currency="USD",
     customer_type="NEW_CUSTOMER"
 )
 
-# Transaction with custom fields
+# Transaksi dengan custom fields
 result = client.transactions.send(
     amount=10000,
     referral_code="HAVN-MJ-001",
@@ -90,10 +114,10 @@ result = client.transactions.send(
 )
 ```
 
-### Sync User
+### 3. Sync User
 
 ```python
-# Sync user from Google OAuth
+# Sync user dari Google OAuth
 result = client.users.sync(
     email="user@example.com",
     name="John Doe",
@@ -104,7 +128,7 @@ result = client.users.sync(
     is_owner=False  # Default: false (role: "partner")
 )
 
-# Sync project owner with "owner" role
+# Sync project owner dengan role "owner"
 result = client.users.sync(
     email="owner@shopeasy.com",
     name="John Doe",
@@ -116,10 +140,10 @@ print(f"User created: {result.user_created}")
 print(f"Associate created: {result.associate_created}")
 ```
 
-### Bulk User Sync
+### 4. Bulk User Sync
 
 ```python
-# Bulk sync multiple users dalam satu request
+# Bulk sync beberapa users sekaligus dalam satu request
 result = client.users.sync_bulk(
     users=[
         {"email": "owner@shopeasy.com", "name": "John Doe", "is_owner": True},
@@ -129,7 +153,7 @@ result = client.users.sync_bulk(
     upline_code="HAVN-MJ-001"
 )
 
-print(f"Success: {result.summary.success}/{result.summary.total}")
+print(f"Sukses: {result.summary.success}/{result.summary.total}")
 print(f"Referral code: {result.referral_code}")
 
 # Link semua users ke associate yang sama
@@ -142,31 +166,31 @@ result = client.users.sync_bulk(
 )
 ```
 
-### Validate Voucher
+### 5. Validasi Voucher
 
 ```python
-# Validate voucher code
+# Validasi kode voucher
 try:
     is_valid = client.vouchers.validate(
         voucher_code="VOUCHER123",
         amount=10000,
         currency="USD"
     )
-    print("✅ Voucher is valid")
+    print("✅ Voucher valid")
 except Exception as e:
-    print(f"❌ Voucher invalid: {str(e)}")
+    print(f"❌ Voucher tidak valid: {str(e)}")
 ```
 
-### Get Vouchers
+### 6. Get Vouchers
 
 ```python
-# Get all vouchers dengan filtering dan pagination
+# Get semua vouchers dengan filtering dan pagination
 result = client.vouchers.get_all(
     active=True,
     is_valid=True,
     page=1,
     per_page=20,
-    display_currency="IDR"  # Convert amounts to IDR for display
+    display_currency="IDR"  # Convert amount ke IDR untuk display
 )
 
 for voucher in result.data:
@@ -184,7 +208,7 @@ result = client.vouchers.get_combined(
 )
 ```
 
-### Error Handling & Rate Limiting
+### 7. Error Handling & Rate Limiting
 
 ```python
 from havn import HAVNClient, HAVNRateLimitError, HAVNAPIError
@@ -196,9 +220,9 @@ try:
         referral_code="HAVN-MJ-001"
     )
 except HAVNRateLimitError as e:
-    print(f"Rate limit exceeded. Retry after {e.retry_after} seconds")
+    print(f"Rate limit terlampaui. Retry setelah {e.retry_after} detik")
     print(f"Limit: {e.limit}, Remaining: {e.remaining}")
-    # Wait and retry
+    # Tunggu dan retry
     time.sleep(e.retry_after)
     result = client.transactions.send(
         amount=10000,
@@ -208,54 +232,54 @@ except HAVNAPIError as e:
     print(f"API Error: {e.message} (status: {e.status_code})")
 ```
 
-### Test Mode (Dry-Run)
+### 8. Test Mode (Dry-Run)
 
 ```python
-# Enable test mode - no data will be saved
+# Aktifkan test mode - tidak ada data yang disimpan
 client = HAVNClient(
     api_key="your_api_key",
     webhook_secret="your_webhook_secret",
-    test_mode=True  # Dry-run mode
+    test_mode=True  # Mode dry-run
 )
 
 result = client.transactions.send(
     amount=10000,
     referral_code="HAVN-MJ-001"
 )
-# This will return success but not save to database
+# Request akan sukses tapi tidak menyimpan data ke database
 ```
 
-## Configuration
+## Konfigurasi
 
 ### Environment Variables
 
 ```bash
 export HAVN_API_KEY="your_api_key"
 export HAVN_WEBHOOK_SECRET="your_webhook_secret"
-export HAVN_BASE_URL="https://api.havn.com"  # Optional
-export HAVN_TIMEOUT=30  # Optional, default 30 seconds
-export HAVN_MAX_RETRIES=3  # Optional, default 3
+export HAVN_BASE_URL="https://api.havn.com"  # Opsional
+export HAVN_TIMEOUT=30  # Opsional, default 30 detik
+export HAVN_MAX_RETRIES=3  # Opsional, default 3
 ```
 
-Then initialize client without parameters:
+Kemudian inisialisasi client tanpa parameter:
 
 ```python
 from havn import HAVNClient
 
-client = HAVNClient()  # Reads from environment variables
+client = HAVNClient()  # Baca dari environment variables
 ```
 
-### Custom Configuration
+### Konfigurasi Custom
 
 ```python
 client = HAVNClient(
     api_key="your_api_key",
     webhook_secret="your_webhook_secret",
     base_url="https://api.havn.com",
-    timeout=30,  # Request timeout in seconds
-    max_retries=3,  # Number of retry attempts
+    timeout=30,  # Request timeout dalam detik
+    max_retries=3,  # Jumlah retry attempts
     backoff_factor=0.5,  # Exponential backoff multiplier
-    test_mode=False  # Enable dry-run mode
+    test_mode=False  # Aktifkan mode dry-run
 )
 ```
 
@@ -267,7 +291,8 @@ from havn.exceptions import (
     HAVNAPIError,
     HAVNAuthError,
     HAVNValidationError,
-    HAVNNetworkError
+    HAVNNetworkError,
+    HAVNRateLimitError
 )
 
 client = HAVNClient(api_key="...", webhook_secret="...")
@@ -278,84 +303,72 @@ try:
         referral_code="HAVN-MJ-001"
     )
 except HAVNAuthError as e:
-    print(f"Authentication failed: {e}")
+    print(f"Autentikasi gagal: {e}")
 except HAVNValidationError as e:
-    print(f"Validation error: {e}")
+    print(f"Error validasi: {e}")
+except HAVNRateLimitError as e:
+    print(f"Rate limit terlampaui: retry setelah {e.retry_after} detik")
 except HAVNNetworkError as e:
-    print(f"Network error: {e}")
+    print(f"Error network: {e}")
 except HAVNAPIError as e:
     print(f"API error: {e}")
 ```
 
-## Documentation
+## Dokumentasi
 
 Dokumentasi lengkap tersedia di folder `docs/`:
 
 ### 📚 Dokumentasi Utama
 
-- **[API Reference](docs/API_REFERENCE.md)** - Dokumentasi lengkap semua methods, parameters, dan models
-- **[Integration Flow](docs/INTEGRATION_FLOW.md)** - Panduan lengkap flow integrasi (project creation, user sync, transaction)
-- **[Examples](docs/EXAMPLES.md)** - Contoh penggunaan lengkap berbagai skenario
+- **[Dokumentasi Lengkap](docs/README.md)** - Index semua dokumentasi webhook
+- **[Auth Webhook](docs/AUTH_WEBHOOK.md)** - Login user via webhook
+- **[Transaction Webhook](docs/TRANSACTION_WEBHOOK.md)** - Kirim transaksi & komisi
+- **[User Sync Webhook](docs/USER_SYNC_WEBHOOK.md)** - Sync user data
+- **[Voucher Webhook](docs/VOUCHER_WEBHOOK.md)** - Validasi & manajemen voucher
 
 ### 📖 Quick Links
 
 **Getting Started:**
 
 - Lihat bagian [Quick Start](#quick-start) di atas
-- Atau lihat [Integration Flow](docs/INTEGRATION_FLOW.md) untuk panduan lengkap
+- Atau lihat [Docs README](docs/README.md) untuk panduan lengkap
 
-**Examples:**
+**Webhook Documentation:**
 
-- [Transaction Examples](docs/EXAMPLES.md#transaction-examples)
-- [User Sync Examples](docs/EXAMPLES.md#user-sync-examples)
-- [Bulk User Sync Examples](docs/EXAMPLES.md#bulk-user-sync-basic)
-- [Voucher Validation Examples](docs/EXAMPLES.md#voucher-validation-examples)
-- [Error Handling Examples](docs/EXAMPLES.md#error-handling-examples)
-
-**Integration Flow:**
-
-- [Complete Integration Flow](docs/INTEGRATION_FLOW.md#complete-integration-flow)
-- [Project Creation](docs/INTEGRATION_FLOW.md#1-project-creation)
-- [User Sync ke HAVN](docs/INTEGRATION_FLOW.md#2-user-sync-ke-havn)
-- [Bulk User Sync](docs/INTEGRATION_FLOW.md#bulk-user-sync-sync-multiple-users-dalam-project)
-- [Payment/Transaction](docs/INTEGRATION_FLOW.md#3-paymenttransaction)
-
-**API Reference:**
-
-- [HAVNClient](docs/API_REFERENCE.md#havnclient)
-- [TransactionWebhook](docs/API_REFERENCE.md#transactionwebhook)
-  - [send()](docs/API_REFERENCE.md#send) - Send transaction dengan currency conversion support
-- [UserSyncWebhook](docs/API_REFERENCE.md#usersyncwebhook)
-  - [sync()](docs/API_REFERENCE.md#sync) - Sync single user dengan is_owner support
-  - [sync_bulk()](docs/API_REFERENCE.md#sync_bulk) - Bulk user sync dengan is_owner support
-- [VoucherWebhook](docs/API_REFERENCE.md#voucherwebhook)
-  - [validate()](docs/API_REFERENCE.md#validate) - Validate voucher dengan currency conversion
-  - [get_all()](docs/API_REFERENCE.md#get_all) - Get all vouchers dengan pagination, filtering, search
-  - [get_combined()](docs/API_REFERENCE.md#get_combined) - Get combined vouchers (HAVN + local)
-- [Models](docs/API_REFERENCE.md#models)
-- [Exceptions](docs/API_REFERENCE.md#exceptions)
-- [Currency Utilities](docs/API_REFERENCE.md#currency-utilities)
+- [Auth Webhook](docs/AUTH_WEBHOOK.md) - Login user
+  - `client.auth.login(email)` - Login via webhook
+- [Transaction Webhook](docs/TRANSACTION_WEBHOOK.md) - Kirim transaksi
+  - `client.transactions.send(**kwargs)` - Send transaction
+- [User Sync Webhook](docs/USER_SYNC_WEBHOOK.md) - Sync users
+  - `client.users.sync(**kwargs)` - Sync single user
+  - `client.users.sync_bulk(**kwargs)` - Bulk sync
+- [Voucher Webhook](docs/VOUCHER_WEBHOOK.md) - Manage vouchers
+  - `client.vouchers.validate(**kwargs)` - Validate voucher
+  - `client.vouchers.get_all(**kwargs)` - Get vouchers
+  - `client.vouchers.get_combined(**kwargs)` - Combine HAVN + local
 
 ### 🚀 Quick Reference
 
 **Client Methods:**
 
-- `client.transactions.send(**kwargs)` - Send transaction
-- `client.users.sync(**kwargs)` - Sync user data
-- `client.users.sync_bulk(**kwargs)` - Bulk sync multiple users
-- `client.vouchers.validate(**kwargs)` - Validate voucher
-- `client.vouchers.get_all(**kwargs)` - Get all vouchers dengan filtering, pagination, search
+- `client.auth.login(email)` - Login user ke HAVN via webhook
+- `client.transactions.send(**kwargs)` - Kirim transaksi
+- `client.users.sync(**kwargs)` - Sync data user
+- `client.users.sync_bulk(**kwargs)` - Bulk sync beberapa users sekaligus
+- `client.vouchers.validate(**kwargs)` - Validasi voucher
+- `client.vouchers.get_all(**kwargs)` - Get semua vouchers dengan filtering, pagination, search
 - `client.vouchers.get_combined(**kwargs)` - Get combined vouchers (HAVN + local)
 
 **Response Models:**
 
-- `TransactionResponse` - Transaction webhook response dengan commissions
-- `UserSyncResponse` - User sync webhook response dengan user dan associate data
-- `BulkUserSyncResponse` - Bulk user sync response dengan summary statistics
-- `VoucherListResponse` - Voucher list response dengan pagination dan filtering
+- `TransactionResponse` - Response transaksi dengan data commissions
+- `UserSyncResponse` - Response user sync dengan data user dan associate
+- `BulkUserSyncResponse` - Response bulk sync dengan summary statistics
+- `VoucherListResponse` - Response voucher list dengan pagination dan filtering
 - Voucher validation mengembalikan `bool` (True jika valid)
+- Auth login mengembalikan `str` (redirect URL)
 
-Lihat [API Reference](docs/API_REFERENCE.md) untuk dokumentasi lengkap.
+Lihat [Dokumentasi Lengkap](docs/README.md) untuk detail setiap webhook.
 
 ## Development
 
@@ -366,9 +379,9 @@ Lihat [API Reference](docs/API_REFERENCE.md) untuk dokumentasi lengkap.
 git clone https://github.com/havn/havn-python-sdk.git
 cd havn-python-sdk
 
-# Create virtual environment
+# Buat virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install development dependencies
 pip install -e ".[dev]"
@@ -386,34 +399,36 @@ flake8 havn
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run semua tests
 pytest
 
-# Run with coverage
+# Run dengan coverage
 pytest --cov=havn --cov-report=html
 
-# Run specific test file
+# Run test file tertentu
 pytest tests/test_client.py
 
-# Run with verbose output
+# Run dengan output verbose
 pytest -v
 ```
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request on GitHub.
+Kontribusi sangat diterima! Silakan buka issue atau submit pull request di GitHub.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Project ini menggunakan MIT License - lihat file [LICENSE](LICENSE) untuk detail.
 
 ## Support & Resources
 
 ### 📚 Documentation
 
-- **API Reference**: [docs/API_REFERENCE.md](docs/API_REFERENCE.md) - Lengkap semua methods dan parameters
-- **Integration Flow**: [docs/INTEGRATION_FLOW.md](docs/INTEGRATION_FLOW.md) - Panduan integrasi lengkap
-- **Examples**: [docs/EXAMPLES.md](docs/EXAMPLES.md) - Contoh penggunaan berbagai skenario
+- **[Docs Index](docs/README.md)** - Index lengkap semua dokumentasi
+- **[Auth Webhook](docs/AUTH_WEBHOOK.md)** - Login user documentation
+- **[Transaction Webhook](docs/TRANSACTION_WEBHOOK.md)** - Transaction documentation
+- **[User Sync Webhook](docs/USER_SYNC_WEBHOOK.md)** - User sync documentation
+- **[Voucher Webhook](docs/VOUCHER_WEBHOOK.md)** - Voucher documentation
 
 ### 💬 Get Help
 
@@ -427,7 +442,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Authentication Error (401):**
 
 - Pastikan API key dan webhook secret benar
-- Check environment variables jika menggunakan env vars
+- Cek environment variables jika menggunakan env vars
 
 **Rate Limit Error (429):**
 
@@ -437,15 +452,21 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Network Error:**
 
-- Check koneksi internet
-- Check HAVN API status
+- Cek koneksi internet
+- Cek HAVN API status
 - Implement retry logic
 
-Lihat [Examples](docs/EXAMPLES.md#error-handling-examples) untuk error handling patterns lengkap.
+**Login Webhook Error:**
+
+- Pastikan user sudah di-sync ke HAVN dengan `client.users.sync()`
+- Pastikan user status active
+- Cek format email valid
+
+Lihat [Dokumentasi](docs/README.md) untuk error handling patterns lengkap.
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for version history.
+Lihat [CHANGELOG.md](CHANGELOG.md) untuk riwayat versi.
 
 ## Related Projects
 

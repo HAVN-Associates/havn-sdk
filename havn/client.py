@@ -16,7 +16,7 @@ from .exceptions import (
     HAVNNetworkError,
     HAVNRateLimitError,
 )
-from .webhooks import TransactionWebhook, UserSyncWebhook, VoucherWebhook
+from .webhooks import TransactionWebhook, UserSyncWebhook, VoucherWebhook, AuthWebhook
 from .utils.auth import build_auth_headers
 from .constants import (
     HTTP_METHOD_GET,
@@ -190,6 +190,7 @@ class HAVNClient:
         self.transactions = TransactionWebhook(self)
         self.users = UserSyncWebhook(self)
         self.vouchers = VoucherWebhook(self)
+        self.auth = AuthWebhook(self)
 
     def _create_session(self) -> requests.Session:
         """

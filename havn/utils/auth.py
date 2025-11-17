@@ -76,6 +76,7 @@ def build_auth_headers(
 
     return {
         "Content-Type": "application/json",
+        "Accept": "application/json",
         "X-API-Key": api_key,
         "X-Signature": signature,
     }

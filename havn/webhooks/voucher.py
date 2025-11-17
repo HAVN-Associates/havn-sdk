@@ -963,47 +963,86 @@ class VoucherWebhook:
                 # Only convert HAVN vouchers (they're in USD)
                 # Local vouchers keep their original currency
                 if voucher.is_havn_voucher and _is_usd_currency(voucher.currency):
-                    # Convert USD cents to target currency
-                    # Convert value
-                    converted_value = converter.convert_from_usd_cents(
-                        voucher.value, target_currency
-                    )
-
-                    # Convert min_purchase
-                    converted_min = converter.convert_from_usd_cents(
-                        voucher.min_purchase, target_currency
-                    )
-
-                    # Convert max_purchase if exists
-                    converted_max = None
-                    if voucher.max_purchase:
-                        converted_max = converter.convert_from_usd_cents(
-                            voucher.max_purchase, target_currency
+                    try:
+                        # Convert USD cents to target currency
+                        # Convert value
+                        converted_value = converter.convert_from_usd_cents(
+                            voucher.value, target_currency
                         )
 
-                    # Convert creation_cost
-                    converted_cost = converter.convert_from_usd_cents(
-                        voucher.creation_cost, target_currency
-                    )
+                        # Validate conversion result (check for suspiciously low rates)
+                        exchange_rate = converted_value.get("exchange_rate", 0)
+                        if (
+                            exchange_rate > 0
+                            and exchange_rate < 100
+                            and target_currency.upper() in ["IDR", "VND", "KRW"]
+                        ):
+                            # These currencies should have rates > 100, something is wrong
+                            import logging
 
-                    # Create new voucher with converted amounts
-                    converted_voucher = self._create_converted_voucher_data(
-                        voucher=voucher,
-                        converted_value=converted_value,
-                        converted_min=converted_min,
-                        converted_max=converted_max,
-                        converted_cost=converted_cost,
-                        target_currency=target_currency,
-                    )
-                    converted_vouchers.append(converted_voucher)
+                            logging.error(
+                                f"Invalid exchange rate for {target_currency}: {exchange_rate}. "
+                                f"Expected > 100 for this currency type. "
+                                f"Voucher conversion may be incorrect.",
+                                extra={
+                                    "voucher_code": voucher.code,
+                                    "currency": target_currency,
+                                    "exchange_rate": exchange_rate,
+                                    "original_value_cents": voucher.value,
+                                    "converted_value": converted_value["amount"],
+                                },
+                            )
+
+                        # Convert min_purchase
+                        converted_min = converter.convert_from_usd_cents(
+                            voucher.min_purchase, target_currency
+                        )
+
+                        # Convert max_purchase if exists
+                        converted_max = None
+                        if voucher.max_purchase:
+                            converted_max = converter.convert_from_usd_cents(
+                                voucher.max_purchase, target_currency
+                            )
+
+                        # Convert creation_cost
+                        converted_cost = converter.convert_from_usd_cents(
+                            voucher.creation_cost, target_currency
+                        )
+
+                        # Create new voucher with converted amounts
+                        converted_voucher = self._create_converted_voucher_data(
+                            voucher=voucher,
+                            converted_value=converted_value,
+                            converted_min=converted_min,
+                            converted_max=converted_max,
+                            converted_cost=converted_cost,
+                            target_currency=target_currency,
+                        )
+                        converted_vouchers.append(converted_voucher)
+                    except (ValueError, KeyError) as e:
+                        # Log error but continue with other vouchers
+                        import logging
+
+                        logging.warning(
+                            f"Currency conversion failed for voucher {voucher.code}: {e}. "
+                            f"Keeping original USD amounts.",
+                            extra={
+                                "voucher_code": voucher.code,
+                                "currency": target_currency,
+                                "error": str(e),
+                            },
+                        )
+                        # Keep original voucher (USD) if conversion fails
+                        converted_vouchers.append(voucher)
                 else:
                     # Local voucher - keep original currency
                     converted_vouchers.append(voucher)
 
             return converted_vouchers
 
-        except (ValueError, KeyError) as e:
-            # If conversion fails, return original vouchers
+        except Exception as e:
+            # If conversion fails completely, return original vouchers
             import logging
 
             logging.warning(

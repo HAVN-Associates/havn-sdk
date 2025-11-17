@@ -272,9 +272,12 @@ class HAVNClient:
         if self.test_mode:
             headers[HEADER_TEST_MODE] = TEST_MODE_VALUE
 
-        # Serialize payload (only for POST/PUT/PATCH requests)
+        # For GET requests, use params, for POST/PUT/PATCH use JSON data
         data = None
-        if method in [HTTP_METHOD_POST, HTTP_METHOD_PUT, HTTP_METHOD_PATCH]:
+        params = None
+        if method == HTTP_METHOD_GET:
+            params = payload
+        elif method in [HTTP_METHOD_POST, HTTP_METHOD_PUT, HTTP_METHOD_PATCH]:
             data = json.dumps(payload) if payload else None
 
         try:
@@ -282,9 +285,7 @@ class HAVNClient:
                 method=method,
                 url=url,
                 data=data,
-                params=payload
-                if method == HTTP_METHOD_GET
-                else None,  # For GET, use params
+                params=params,
                 headers=headers,
                 timeout=self.timeout,
             )

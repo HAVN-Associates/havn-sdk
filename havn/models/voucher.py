@@ -66,9 +66,10 @@ class VoucherListFilters:
         result = {}
         for key, value in asdict(self).items():
             if value is not None:
-                # Convert boolean to lowercase string
                 if isinstance(value, bool):
-                    result[key] = "true" if value else "false"
+                    result[key] = value  # Keep as boolean, requests will handle it
+                elif isinstance(value, (int, float)):
+                    result[key] = str(value)
                 else:
                     result[key] = str(value)
         return result
@@ -94,13 +95,15 @@ class VoucherListFilters:
         # Validate type
         if self.type is not None:
             valid_types = ["DISCOUNT_PERCENTAGE", "DISCOUNT_FIXED"]
-            if self.type.upper() not in valid_types:
+            type_upper = self.type.upper() if isinstance(self.type, str) else str(self.type)
+            if type_upper not in valid_types:
                 raise ValueError(f"type must be one of: {', '.join(valid_types)}")
 
         # Validate client_type
         if self.client_type is not None:
             valid_client_types = ["NEW_CUSTOMER", "RECURRING"]
-            if self.client_type.upper() not in valid_client_types:
+            client_type_upper = self.client_type.upper() if isinstance(self.client_type, str) else str(self.client_type)
+            if client_type_upper not in valid_client_types:
                 raise ValueError(
                     f"client_type must be one of: {', '.join(valid_client_types)}"
                 )
@@ -118,7 +121,8 @@ class VoucherListFilters:
                 "usage_limit",
                 "min_purchase",
             ]
-            if self.sort_by.lower() not in valid_sort_fields:
+            sort_by_lower = self.sort_by.lower() if isinstance(self.sort_by, str) else str(self.sort_by)
+            if sort_by_lower not in valid_sort_fields:
                 raise ValueError(
                     f"sort_by must be one of: {', '.join(valid_sort_fields)}"
                 )
@@ -126,7 +130,8 @@ class VoucherListFilters:
         # Validate sort_order
         if self.sort_order is not None:
             valid_orders = ["asc", "desc"]
-            if self.sort_order.lower() not in valid_orders:
+            sort_order_lower = self.sort_order.lower() if isinstance(self.sort_order, str) else str(self.sort_order)
+            if sort_order_lower not in valid_orders:
                 raise ValueError(
                     f"sort_order must be one of: {', '.join(valid_orders)}"
                 )

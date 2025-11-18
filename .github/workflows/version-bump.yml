@@ -99,15 +99,14 @@ jobs:
 
       - name: Determine version bump type
         id: bump_type
+        env:
+          HEAD_COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             BUMP_TYPE="${{ github.event.inputs.version_bump }}"
           else
             # Auto-detect dari commit message
-            COMMIT_MSG=$(cat <<'EOF'
-${{ github.event.head_commit.message }}
-EOF
-)
+            COMMIT_MSG="${HEAD_COMMIT_MSG:-}"
             if [ -z "$COMMIT_MSG" ]; then
               BUMP_TYPE="patch"  # Default jika commit message kosong
             elif echo "$COMMIT_MSG" | grep -qiE "^(feat|feature)(\(.+\))?:"; then
@@ -242,8 +241,13 @@ EOF
 
           # Insert after "## [Unreleased]" line
           if [ -f CHANGELOG.md ]; then
-            # GitHub Actions runs on Linux, so use standard sed
-            sed -i "/## \[Unreleased\]/r /tmp/changelog_entry.txt" CHANGELOG.md
+            if grep -q "## \[Unreleased\]" CHANGELOG.md; then
+              sed -i "/## \[Unreleased\]/r /tmp/changelog_entry.txt" CHANGELOG.md
+            else
+              TMP_FILE=$(mktemp)
+              cat /tmp/changelog_entry.txt CHANGELOG.md > "$TMP_FILE"
+              mv "$TMP_FILE" CHANGELOG.md
+            fi
           fi
 
       - name: Commit version bump

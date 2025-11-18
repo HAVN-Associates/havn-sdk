@@ -401,6 +401,20 @@ def validate_user_data(email: str, name: str) -> bool:
     return True
 
 if validate_user_data(email, name):
+
+### 5. Persist Referral Codes di Database SaaS
+
+Untuk memastikan user sync, login, dan transaction flow berjalan konsisten, sediakan dua kolom pada basis data internal Anda:
+
+| Tabel yang disarankan | Kolom | Contoh tipe | Tujuan |
+| --- | --- | --- | --- |
+| `projects` / `companies` | `upline_referral_code` | `VARCHAR(64)` nullable | Menyimpan kode referral upline (mis. `HAVN-MJ-001`) yang diperoleh saat onboarding project/downline. Kolom ini dikirim sebagai `upline_code` setiap kali melakukan user sync atau transaction untuk project tersebut. |
+| `projects` / `companies` | `referral_code` | `VARCHAR(64)` unik | Menyimpan referral code yang diberikan HAVN untuk owner/project Anda. Nilai ini dipakai ketika ingin mereferensikan project lain (menjadi upline) atau ketika HAVN meminta bukti kepemilikan referral. |
+
+- Jalankan migrasi skema Anda sendiri untuk menambahkan kolom tersebut (misal `ALTER TABLE projects ADD COLUMN upline_referral_code VARCHAR(64)` dan `ADD COLUMN referral_code VARCHAR(64)`).
+- Saat memanggil `client.users.sync()` atau `sync_bulk()`, isi `upline_code` dengan nilai `upline_referral_code` yang tersimpan.
+- Setelah owner disinkronkan dan HAVN mengembalikan `referral_code`, simpan nilai tersebut di kolom `referral_code` agar bisa dipakai sebagai upline untuk project lain maupun audit.
+- Dengan struktur ini, SaaS tidak perlu menebak referral chain; SDK dan backend HAVN tinggal membaca nilai dari database setiap kali user/transaction diproses.
     result = client.users.sync(email=email, name=name)
 ```
 

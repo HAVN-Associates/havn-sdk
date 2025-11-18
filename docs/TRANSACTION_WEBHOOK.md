@@ -408,6 +408,13 @@ logger.info(
 )
 ```
 
+### 5. Persist Promo Code / Voucher Reference
+
+- **Simpan kode voucher HAVN** di sisi SaaS (mis. kolom `havn_voucher_code` pada tabel `payments` / `subscription_payments` dengan panjang 64 karakter) segera setelah user memvalidasi voucher.
+- **Gunakan nilai yang tersimpan** tersebut setiap kali memanggil `transactions.send()` agar `promo_code` tetap ada pada retry, manual sync, atau settlement ulang tanpa bergantung pada payload Midtrans/custom_field.
+- **Alasan utama**: webhook Midtrans tidak menjamin pengiriman kembali kode voucher, sementara HAVN mewajibkan `promo_code` ketika `subtotal_transaction > amount`. Menyimpan sendiri memastikan tracking komisi dan limit voucher selalu konsisten.
+- Jika belum siap menambah kolom permanen, minimal simpan di storage sementara (session/cache) sampai transaksi benar-benar diverifikasi dan dikirim ke HAVN.
+
 ---
 
 ## Commission Calculation

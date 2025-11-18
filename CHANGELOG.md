@@ -66,6 +66,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 - README, API reference, dan seluruh dokumen terkait transaksi/voucher diperbarui untuk menekankan server-side conversion dan flag baru.
 - Contoh penggunaan non-USD kini menampilkan `server_side_conversion=True` serta menghapus referensi `auto_convert`.
+
+## [1.1.4] - 2025-11-17
+
+### Changed
+- Auto-bumped version to 1.1.4
 ## [1.1.2] - 2025-11-17
 
 ### Changed

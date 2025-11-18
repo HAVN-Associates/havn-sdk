@@ -64,6 +64,7 @@ class VoucherData:
         created_date: Created date (ISO format)
         updated_at: Updated date (ISO format)
         currency: Currency code
+        configured_currency: Currency code yang dikonfigurasikan khusus untuk SaaS (opsional)
         affiliates_url: Affiliate URL (optional)
         affiliates_qr_image: QR code image URL (optional)
         is_expired: Whether voucher is expired
@@ -93,6 +94,7 @@ class VoucherData:
     created_date: str = ""
     updated_at: str = ""
     currency: str = "USD"
+    configured_currency: Optional[str] = None
     affiliates_url: Optional[str] = None
     affiliates_qr_image: Optional[str] = None
     is_expired: bool = False

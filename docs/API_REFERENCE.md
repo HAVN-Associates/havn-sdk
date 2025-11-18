@@ -164,6 +164,8 @@ Send transaction ke HAVN API.
 ```python
 client.transactions.send(
     amount: int,
+    payment_gateway_transaction_id: str,
+    customer_email: str,
     referral_code: Optional[str] = None,
     promo_code: Optional[str] = None,
     currency: str = "USD",
@@ -172,10 +174,9 @@ client.transactions.send(
     acquisition_method: Optional[str] = None,
     custom_fields: Optional[Dict[str, Any]] = None,
     invoice_id: Optional[str] = None,
-    customer_email: Optional[str] = None,
     transaction_type: Optional[str] = None,
     description: Optional[str] = None,
-    payment_gateway_transaction_id: Optional[str] = None,
+    server_side_conversion: bool = False,
 ) -> TransactionResponse
 ```
 
@@ -183,7 +184,7 @@ client.transactions.send(
 
 | Parameter                        | Type   | Required | Default          | Description                                                                                                                                                                                                                                                                                                  |
 | -------------------------------- | ------ | -------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `amount`                         | `int`  | ✅ Yes   | -                | Final transaction amount<br>- Jika `currency="USD"`: amount dalam USD cents<br>- Jika `currency != "USD"` dan `auto_convert=True`: amount dalam source currency's smallest unit<br>- Jika `currency != "USD"` dan `auto_convert=False`: amount dalam USD cents (backend akan handle conversion)              |
+| `amount`                         | `int`  | ✅ Yes   | -                | Final transaction amount dalam smallest unit currency yang dikirimkan.<br>- Jika mengirim USD: isi dalam USD cents.<br>- Jika mengirim currency lain, kirim nilai mentahnya dan set `server_side_conversion=True` agar backend HAVN melakukan konversi resmi.                                         |
 | `payment_gateway_transaction_id` | `str`  | ✅ Yes   | -                | Payment gateway transaction ID (required, non-empty, max 200 characters)                                                                                                                                                                                                                                     |
 | `customer_email`                 | `str`  | ✅ Yes   | -                | Customer email (required, valid email format)                                                                                                                                                                                                                                                                |
 | `referral_code`                  | `str`  | No       | `None`           | Associate referral code                                                                                                                                                                                                                                                                                      |
@@ -196,7 +197,7 @@ client.transactions.send(
 | `invoice_id`                     | `str`  | No       | `None`           | External invoice ID                                                                                                                                                                                                                                                                                          |
 | `transaction_type`               | `str`  | No       | `None`           | Transaction type (untuk logging)                                                                                                                                                                                                                                                                             |
 | `description`                    | `str`  | No       | `None`           | Transaction description                                                                                                                                                                                                                                                                                      |
-| `auto_convert`                   | `bool` | No       | `True`           | Apakah auto-convert non-USD amounts ke USD cents<br>- `True`: SDK convert ke USD cents sebelum kirim (backend akan verify dengan exact match)<br>- `False`: Amount dikirim as-is (backend akan handle conversion)                                                                                            |
+| `server_side_conversion`         | `bool` | No       | `False`          | Flag untuk meminta backend melakukan konversi currency resmi.<br>- `True`: SDK mengirim amount/currency apa adanya; backend menghitung ulang dengan kurs internal.<br>- `False`: Gunakan hanya jika amount sudah dalam USD cents dan tidak perlu konversi backend.                                         |
 
 #### Returns
 
@@ -211,15 +212,13 @@ client.transactions.send(
 
 #### Security Notes
 
-**Currency Conversion Verification:**
+**Currency Conversion (Server-Side Authority):**
 
-- ✅ **Backend Always Verifies** - Jika `auto_convert=True`, backend akan verify conversion dengan recalculate server-side
-- ✅ **Exact Match Required** - Amount harus match exact (no tolerance) dengan backend calculation
-- ✅ **Transaction Failed** - Jika conversion mismatch, transaction akan di-mark sebagai `FAILED`
-- ✅ **Server Authoritative** - Server exchange rate digunakan untuk final calculation (authoritative)
-- ✅ **Audit Trail** - Original amounts dan exchange rates disimpan di `custom_fields` untuk audit
+- ✅ **Gunakan `server_side_conversion=True`** untuk transaksi non-USD agar backend resmi melakukan konversi berdasarkan kurs internal HAVN.
+- ✅ **Exact Match Required** - Backend menghitung ulang dan akan menolak jumlah yang tidak konsisten dengan kurs terkini.
+- ✅ **Audit Trail** - Amount awal dan metadata kurs disimpan oleh backend untuk kebutuhan audit/komisi.
 
-**Important:** SDK conversion adalah convenience feature. Backend selalu verify untuk security. Jika conversion tidak match, transaction akan di-reject.
+**Important:** SDK tidak lagi melakukan auto-conversion. Selalu kirim nilai asli Anda; backend adalah satu-satunya sumber kebenaran untuk FX.
 
 #### Examples
 
@@ -269,33 +268,33 @@ result = client.transactions.send(
 )
 ```
 
-**Transaction dengan Auto-Conversion (IDR ke USD):**
+**Transaction dengan Server-Side Conversion (IDR):**
 
 ```python
-# SDK akan auto-convert IDR ke USD cents
+# Kirim amount mentah dalam IDR dan biarkan backend HAVN yang mengkonversi
 result = client.transactions.send(
-    amount=150000,  # IDR rupiah (150.000 IDR)
-    currency="IDR",  # SDK auto-convert ke USD cents
-    referral_code="HAVN-MJ-001"
+    amount=150000,  # 150.000 IDR (smallest unit)
+    currency="IDR",
+    referral_code="HAVN-MJ-001",
+    payment_gateway_transaction_id="stripe_111222333",
+    customer_email="customer@example.com",
+    server_side_conversion=True,
 )
-# SDK internally: converts 150000 IDR → ~1000 USD cents
-# Backend receives: amount=1000, currency="USD"
-# Backend verifies: Recalculates conversion server-side and verifies exact match
-# Original amount & exchange rate tersimpan di custom_fields untuk audit
-# ⚠️ Jika conversion tidak match exact → transaction FAILED (security requirement)
+# Backend menggunakan kurs internal resmi → memastikan komisi & audit konsisten
 ```
 
-**Transaction dengan Auto-Conversion Disabled (Backend Handle):**
+**Transaction dengan Amount Sudah USD:**
 
 ```python
-# Kirim amount sudah dalam USD cents, tapi info currency tetap ada
+# Jika payment processor Anda sudah mengekspresikan amount dalam USD cents
 result = client.transactions.send(
-    amount=10000,  # Sudah dalam USD cents
-    currency="IDR",  # Info saja, backend akan handle conversion
-    auto_convert=False,  # Disable auto-conversion
-    referral_code="HAVN-MJ-001"
+    amount=10000,  # $100.00 USD cents
+    currency="USD",
+    referral_code="HAVN-MJ-001",
+    payment_gateway_transaction_id="stripe_444555666",
+    customer_email="customer@example.com",
+    server_side_conversion=False,  # default
 )
-# Backend akan handle conversion sendiri
 ```
 
 **Recurring Transaction:**
@@ -668,7 +667,6 @@ client.vouchers.validate(
     voucher_code: str,
     amount: Optional[int] = None,
     currency: Optional[str] = None,
-    auto_convert: bool = True,
 ) -> bool
 ```
 
@@ -677,9 +675,8 @@ client.vouchers.validate(
 | Parameter      | Type   | Required | Default | Description                                                                                                                                                                                                           |
 | -------------- | ------ | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `voucher_code` | `str`  | ✅ Yes   | -       | Voucher code untuk di-validate                                                                                                                                                                                        |
-| `amount`       | `int`  | No       | `None`  | Transaction amount<br>- Jika `auto_convert=True`: amount dalam source currency (akan di-convert ke voucher currency)<br>- Jika `auto_convert=False`: amount dalam voucher currency (harus match)                      |
-| `currency`     | `str`  | No       | `None`  | Source currency code (digunakan jika `auto_convert=True` untuk convert ke voucher currency)                                                                                                                           |
-| `auto_convert` | `bool` | No       | `True`  | Apakah auto-convert amount ke voucher currency<br>- `True`: Convert amount ke voucher currency sebelum validation (convenience feature)<br>- `False`: Kirim amount as-is (backend akan handle conversion server-side) |
+| `amount`       | `int`  | No       | `None`  | Transaction amount dalam smallest unit currency yang sama dengan parameter `currency`. Backend HAVN akan melakukan konversi resmi terhadap currency voucher secara otomatis.                                         |
+| `currency`     | `str`  | No       | `None`  | Currency asal dari amount (contoh: `"IDR"`, `"EUR"`). Jika tidak diisi, backend menganggap amount sudah berada pada currency voucher.                                                                              |
 
 #### Returns
 
@@ -701,7 +698,7 @@ client.vouchers.validate(
 - ✅ **Exact Match** - Amount harus match voucher currency setelah backend conversion
 - ✅ **Conversion via USD** - Backend convert via USD: `source_currency -> USD -> voucher_currency`
 
-**Important:** SDK conversion adalah convenience feature untuk UX. Backend selalu melakukan conversion sendiri untuk security. Jika `auto_convert=True`, SDK melakukan pre-conversion untuk convenience, tapi backend tetap convert ulang untuk verification.
+**Important:** Tidak ada konversi di sisi SDK. Selalu kirim amount/currency asli Anda; backend melakukan konversi dan validasi penuh.
 
 #### Status Codes
 
@@ -762,30 +759,24 @@ else:
     print(f"❌ {message}")
 ```
 
-**Validation dengan Auto-Conversion (IDR ke USD):**
+**Validation dengan Amount Non-USD (Backend Convert):**
 
 ```python
-# Validate dengan amount dalam IDR, tapi voucher currency USD
-# SDK akan auto-convert amount ke voucher currency (convenience)
-# Backend akan convert ulang server-side untuk security
+# Kirim nilai mentah IDR; backend HAVN mengkonversi ke currency voucher
 is_valid = client.vouchers.validate(
     voucher_code="HAVN-123",
-    amount=150000,  # IDR rupiah
-    currency="IDR",  # SDK converts to voucher currency (USD) for convenience
-    auto_convert=True  # Default (backend tetap convert server-side)
+    amount=150000,  # Rp 150.000
+    currency="IDR",
 )
-# Note: Backend always converts server-side (security requirement)
 ```
 
-**Validation dengan Auto-Conversion Disabled:**
+**Validation dengan Amount Sudah Sesuai Currency Voucher:**
 
 ```python
-# Kirim amount sudah dalam voucher currency
 is_valid = client.vouchers.validate(
     voucher_code="HAVN-123",
-    amount=10000,  # USD cents (matches voucher currency)
+    amount=10000,  # USD cents
     currency="USD",
-    auto_convert=False  # Backend akan validate currency match
 )
 ```
 

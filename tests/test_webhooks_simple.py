@@ -86,6 +86,37 @@ class TestWebhooksClientAPI:
             assert len(result.commissions) == 1
             assert result.commissions[0].amount == 1000
 
+    def test_transaction_server_side_conversion(self):
+        """Ensure SDK forwards raw currency when server_side_conversion enabled"""
+        with patch.object(self.client, '_make_request') as mock_request:
+            mock_request.return_value = {
+                "success": True,
+                "message": "Transaction processed",
+                "transaction": {
+                    "transaction_id": "txn_ssc_1",
+                    "amount": 150000,
+                    "currency": "IDR",
+                    "status": "completed",
+                    "customer_type": "NEW_CUSTOMER"
+                },
+                "commissions": []
+            }
+
+            self.client.transactions.send(
+                amount=150000,
+                payment_gateway_transaction_id="pg_txn_ssc",
+                customer_email="customer@example.com",
+                referral_code="HAVN-MJ-001",
+                currency="IDR",
+                server_side_conversion=True,
+            )
+
+            _, kwargs = mock_request.call_args
+            payload = kwargs["payload"]
+            assert payload["currency"] == "IDR"
+            assert payload["amount"] == 150000
+            assert payload["server_side_conversion"] is True
+
     def test_user_sync_webhook_single(self):
         """Test user sync webhook single user"""
         with patch.object(self.client, '_make_request') as mock_request:

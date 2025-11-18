@@ -7,6 +7,7 @@ SDK resmi untuk menghubungkan SaaS Anda ke HAVN (Hierarchical Associate Voucher 
 - Integrasi cepat: client, konfigurasi, dan helper siap pakai untuk auth, transaksi, user sync, dan voucher.
 - Aman & resilien: HMAC signature, retry bawaan, dan pengecualian khusus untuk memudahkan observabilitas.
 - Konsisten: seluruh payload, response, dan error memiliki model serta dokumentasi terstandarisasi.
+- Server-side currency conversion: SDK meneruskan amount/currency mentah dan HAVN backend menjadi single source of truth (aktifkan `server_side_conversion=True` pada transaksi non-USD; voucher validation/listing selalu mengikuti backend).
 
 ## Quick Start
 
@@ -14,6 +15,12 @@ SDK resmi untuk menghubungkan SaaS Anda ke HAVN (Hierarchical Associate Voucher 
 2. Instal paket melalui `pip install havn-sdk`.
 3. Konfigurasikan API key & webhook secret via environment variables atau parameter client.
 4. Buka folder `docs/` untuk panduan metode, contoh skenario, dan best practices sebelum menghubungkan endpoint produksi.
+
+### Pembaruan Penting v1.1.5
+
+- **Server-Side FX Conversion**: Semua konversi resmi kini dilakukan di backend HAVN. SDK cukup meneruskan `amount` dalam smallest unit currency asal dan set `server_side_conversion=True` ketika bukan USD.
+- **Voucher Flow Disederhanakan**: `client.vouchers.validate()`, `get_all()`, dan `get_combined()` tidak lagi melakukan konversi lokal; gunakan `display_currency` untuk meminta tampilan tertentu dari backend.
+- **Utilitas Konversi Didepresiasi**: `convert_to_usd_cents()` dan `convert_from_usd_cents()` masih tersedia untuk debugging/tampilan, namun akan dihapus pada rilis mendatang. Gunakan backend sebagai sumber kebenaran.
 
 ## Navigasi Dokumentasi
 

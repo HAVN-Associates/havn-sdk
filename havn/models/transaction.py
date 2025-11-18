@@ -25,6 +25,7 @@ class TransactionPayload:
         invoice_id: External invoice ID (optional)
         transaction_type: Transaction type (optional, untuk logging)
         description: Transaction description (optional)
+        server_side_conversion: Flag to request backend-side currency conversion (optional)
 
     Example:
         >>> payload = TransactionPayload(
@@ -50,6 +51,7 @@ class TransactionPayload:
     invoice_id: Optional[str] = None
     transaction_type: Optional[str] = None
     description: Optional[str] = None
+    server_side_conversion: Optional[bool] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary, removing None values"""
@@ -129,6 +131,12 @@ class TransactionPayload:
                     f"Invalid acquisition_method: {self.acquisition_method}. "
                     f"Must be one of: {', '.join(valid_methods)}"
                 )
+
+        # Validate server_side_conversion flag type (if provided)
+        if self.server_side_conversion is not None and not isinstance(
+            self.server_side_conversion, bool
+        ):
+            raise ValueError("server_side_conversion must be a boolean if provided")
 
 
 @dataclass

@@ -6,8 +6,6 @@ from typing import Dict, Any, Optional
 from ..models.transaction import TransactionPayload, TransactionResponse
 from ..models.voucher_list import is_havn_voucher_code
 from ..exceptions import HAVNValidationError
-from ..utils.currency import get_currency_converter
-from ..constants import USD_CURRENCY
 
 
 class TransactionWebhook:
@@ -49,7 +47,7 @@ class TransactionWebhook:
         invoice_id: Optional[str] = None,
         transaction_type: Optional[str] = None,
         description: Optional[str] = None,
-        auto_convert: bool = True,
+        server_side_conversion: bool = False,
     ) -> TransactionResponse:
         """
         Send transaction to HAVN API
@@ -59,16 +57,15 @@ class TransactionWebhook:
         Local vouchers should be handled separately by SaaS company.
 
         **Currency Conversion:**
-        - If currency != "USD" and auto_convert=True (default), SDK will automatically
-          convert amount to USD cents before sending to HAVN.
-        - Original amount and currency info are preserved in custom_fields for audit.
-        - HAVN always stores amounts in USD cents (single source of truth).
+        - HAVN backend is the single source of truth for currency conversion.
+        - SDK forwards the amount exactly as provided and relies on backend conversion
+          when `server_side_conversion=True`.
 
         Args:
             amount: Final transaction amount (required)
                 - If currency="USD": amount in USD cents
-                - If currency != "USD" and auto_convert=True: amount in source currency's smallest unit
-                - If currency != "USD" and auto_convert=False: amount in USD cents (conversion handled by backend)
+                - If currency != "USD": amount in that currency's smallest unit and set
+                  `server_side_conversion=True` so backend converts it
             payment_gateway_transaction_id: Payment gateway transaction ID (required)
                 - Must be non-empty string
                 - Max 200 characters
@@ -90,9 +87,9 @@ class TransactionWebhook:
             invoice_id: External invoice ID (optional)
             transaction_type: Transaction type (optional, untuk logging)
             description: Transaction description (optional)
-            auto_convert: Whether to automatically convert non-USD amounts to USD cents (default: True)
-                - If True: SDK converts to USD cents before sending
-                - If False: Amount sent as-is (backend will handle conversion)
+            server_side_conversion: If True, SDK sends original amount/currency and relies on
+                HAVN backend to perform official conversion. If you're already sending USD cents,
+                leave this False.
 
         Returns:
             TransactionResponse with transaction and commission data
@@ -169,42 +166,6 @@ class TransactionWebhook:
         currency_to_send = currency.upper().strip()
         custom_fields_with_metadata = custom_fields.copy() if custom_fields else {}
 
-        # Auto-convert non-USD currencies to USD cents if enabled
-        if auto_convert and currency_to_send != USD_CURRENCY:
-            try:
-                converter = get_currency_converter()
-
-                # Convert amount
-                converted_amount = converter.convert_to_usd_cents(amount, currency)
-                amount_to_send = converted_amount["amount_cents"]
-
-                # Store original amount and conversion metadata in custom_fields
-                custom_fields_with_metadata["original_currency"] = currency
-                custom_fields_with_metadata["original_amount"] = amount
-                custom_fields_with_metadata["exchange_rate"] = converted_amount[
-                    "exchange_rate"
-                ]
-
-                # Convert subtotal_transaction if provided
-                if subtotal_transaction is not None:
-                    converted_subtotal = converter.convert_to_usd_cents(
-                        subtotal_transaction, currency
-                    )
-                    subtotal_to_send = converted_subtotal["amount_cents"]
-                    custom_fields_with_metadata["original_subtotal"] = (
-                        subtotal_transaction
-                    )
-
-                # Update currency to USD after conversion
-                currency_to_send = USD_CURRENCY
-
-            except ValueError as e:
-                # Currency conversion failed (invalid currency or exchange rate unavailable)
-                raise HAVNValidationError(
-                    f"Currency conversion failed: {str(e)}. "
-                    "If you want to send amount already in USD cents, set auto_convert=False."
-                )
-
         # Build payload (required fields first)
         payload = TransactionPayload(
             amount=amount_to_send,
@@ -212,7 +173,7 @@ class TransactionWebhook:
             customer_email=customer_email,
             referral_code=referral_code,
             promo_code=promo_code_to_send,  # Only HAVN vouchers are sent
-            currency=currency_to_send,  # USD after conversion, or original if auto_convert=False
+            currency=currency_to_send,  # Uppercase original currency (backend handles conversion)
             customer_type=customer_type,
             subtotal_transaction=subtotal_to_send,
             acquisition_method=acquisition_method,  # Auto-determined if not provided
@@ -222,6 +183,7 @@ class TransactionWebhook:
             invoice_id=invoice_id,
             transaction_type=transaction_type,
             description=description,
+            server_side_conversion=server_side_conversion or None,
         )
 
         # Validate payload

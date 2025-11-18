@@ -501,9 +501,9 @@ except HAVNAPIError:
     print("❌ Voucher invalid")
 ```
 
-### 4. Validate Voucher dengan Auto-Conversion (Currency)
+### 4. Validate Voucher dengan Amount Non-USD
 
-Validate voucher dengan amount dalam currency berbeda dari voucher currency.
+Validate voucher dengan amount dalam currency berbeda dari voucher currency. Backend HAVN akan melakukan konversi resmi.
 
 ```python
 from havn import HAVNClient
@@ -511,15 +511,12 @@ from havn.exceptions import HAVNAPIError
 
 client = HAVNClient(api_key="...", webhook_secret="...")
 
-# Validate dengan amount dalam IDR, tapi voucher currency USD
-# SDK akan auto-convert amount ke voucher currency (convenience)
-# Backend akan convert ulang server-side untuk security
+# Validate dengan amount dalam IDR, backend HAVN akan mengkonversi otomatis
 try:
     is_valid = client.vouchers.validate(
         voucher_code="HAVN-123",
         amount=150000,  # IDR rupiah (150.000 IDR)
-        currency="IDR",  # SDK converts to voucher currency (USD) for convenience
-        auto_convert=True  # Default (backend tetap convert server-side)
+        currency="IDR",
     )
     print("✅ Voucher is valid!")
 except HAVNAPIError as e:
@@ -586,166 +583,94 @@ for voucher in result.data:
 
 ## Currency Conversion Examples
 
-### Auto-Conversion (Recommended)
-
-SDK dapat auto-convert non-USD amounts ke USD cents sebelum kirim ke HAVN.
-
-**Security Note:** Backend selalu verify conversion dengan recalculate server-side. Amount harus match exact (no tolerance). Jika mismatch, transaction akan di-mark sebagai `FAILED`.
+### Server-Side Conversion (Recommended)
 
 ```python
 from havn import HAVNClient
 
 client = HAVNClient(api_key="...", webhook_secret="...")
 
-# Transaction dengan IDR - SDK auto-convert ke USD cents
 result = client.transactions.send(
     amount=150000,  # IDR rupiah (150.000 IDR)
-    currency="IDR",  # SDK auto-convert ke USD cents
-    referral_code="HAVN-MJ-001"
+    currency="IDR",
+    referral_code="HAVN-MJ-001",
+    payment_gateway_transaction_id="midtrans_txn_currency",
+    customer_email="customer@example.com",
+    server_side_conversion=True,
 )
 
 print(f"Transaction ID: {result.transaction.transaction_id}")
-print(f"Amount: ${result.transaction.amount / 100:.2f}")  # USD cents
-# Original amount & exchange rate tersimpan di custom_fields untuk audit
-# ⚠️ Security: Backend verifies conversion dengan exact match (no tolerance)
-#    Jika mismatch → transaction FAILED
+print(f"Raw Amount (IDR): 150000")
+print(f"Commission Currency: {result.currency}")
 ```
 
-### Manual Conversion
+### Manual Conversion (Deprecated Helpers)
 
-Gunakan helper function untuk convert manual sebelum kirim.
+Helper `convert_to_usd_cents()` hanya untuk kebutuhan tampilan/debugging. Backend tetap melakukan konversi resmi.
 
 ```python
-from havn import HAVNClient
 from havn.utils.currency import convert_to_usd_cents
 
-client = HAVNClient(api_key="...", webhook_secret="...")
-
-# Convert manual
-conversion_result = convert_to_usd_cents(150000, "IDR")
-usd_cents = conversion_result["amount_cents"]
-
-print(f"Original: 150000 IDR")
-print(f"Converted: {usd_cents} USD cents")
-print(f"Exchange Rate: {conversion_result['exchange_rate']}")
-
-# Kirim dengan USD
-result = client.transactions.send(
-    amount=usd_cents,
-    currency="USD",
-    referral_code="HAVN-MJ-001"
-)
+conversion = convert_to_usd_cents(150000, "IDR")
+print(conversion["amount_cents"], "USD cents")
 ```
 
-### Convert Response untuk Display
-
-Convert response dari USD cents ke currency lokal untuk display di frontend.
+### Convert Response untuk Display (Deprecated Helper)
 
 ```python
-from havn import HAVNClient
 from havn.utils.currency import convert_from_usd_cents
 
-client = HAVNClient(api_key="...", webhook_secret="...")
-
-result = client.transactions.send(
-    amount=10000,
-    currency="USD",
-    referral_code="HAVN-MJ-001"
-)
-
-# Convert response untuk display
-idr_result = convert_from_usd_cents(
-    result.transaction.amount,  # USD cents
-    "IDR"
-)
-
-print(f"Amount: {idr_result['amount_formatted']}")  # "Rp 150.000"
-print(f"Original: ${result.transaction.amount / 100:.2f}")  # "$10.00"
+idr_view = convert_from_usd_cents(1000, "IDR")
+print(idr_view["amount_formatted"])
 ```
 
-### Disable Auto-Conversion
-
-Jika ingin backend handle conversion, disable auto-conversion di SDK.
+### Kirim Amount USD Tanpa Konversi
 
 ```python
-from havn import HAVNClient
-
-client = HAVNClient(api_key="...", webhook_secret="...")
-
-# Kirim amount sudah dalam USD cents, tapi info currency tetap ada
 result = client.transactions.send(
-    amount=10000,  # Sudah dalam USD cents
-    currency="IDR",  # Info saja, backend akan handle conversion
-    auto_convert=False,  # Disable auto-conversion
-    referral_code="HAVN-MJ-001"
+    amount=10000,  # USD cents
+    currency="USD",
+    referral_code="HAVN-MJ-001",
+    payment_gateway_transaction_id="stripe_txn_usd",
+    customer_email="customer@example.com",
 )
 ```
 
 ### Multiple Currency Support
 
-SDK mendukung berbagai currency dengan auto-conversion.
-
 ```python
-from havn import HAVNClient
-
-client = HAVNClient(api_key="...", webhook_secret="...")
-
-# EUR
-result = client.transactions.send(
-    amount=8500,  # EUR cents (85.00 EUR)
+# EUR (server-side conversion)
+client.transactions.send(
+    amount=8500,
     currency="EUR",
-    referral_code="HAVN-MJ-001"
+    referral_code="HAVN-MJ-001",
+    payment_gateway_transaction_id="stripe_txn_eur",
+    customer_email="eu@example.com",
+    server_side_conversion=True,
 )
 
 # GBP
-result = client.transactions.send(
-    amount=7500,  # GBP pence (75.00 GBP)
+client.transactions.send(
+    amount=7500,
     currency="GBP",
-    referral_code="HAVN-MJ-001"
-)
-
-# IDR
-result = client.transactions.send(
-    amount=150000,  # IDR rupiah (150.000 IDR)
-    currency="IDR",
-    referral_code="HAVN-MJ-001"
+    referral_code="HAVN-MJ-001",
+    payment_gateway_transaction_id="stripe_txn_gbp",
+    customer_email="uk@example.com",
+    server_side_conversion=True,
 )
 ```
 
-### Get Exchange Rate
-
-Check exchange rate sebelum convert.
+### Diagnostics: Exchange Rate & Converter
 
 ```python
-from havn.utils.currency import get_exchange_rate
+from havn.utils.currency import get_exchange_rate, CurrencyConverter
 
-# Get exchange rate
-rate = get_exchange_rate("IDR", "USD")  # 1 USD = X IDR
-print(f"Exchange Rate: {rate}")
+rate = get_exchange_rate("IDR", "USD")
+print(f"Cached rate: {rate}")
 
-if rate:
-    # Calculate expected conversion
-    idr_amount = 150000
-    usd_amount = idr_amount * rate
-    print(f"{idr_amount} IDR = {usd_amount:.2f} USD")
-```
-
-### Currency Converter Configuration
-
-Configure currency converter dengan custom settings.
-
-```python
-from havn.utils.currency import CurrencyConverter
-
-# Custom converter dengan custom cache duration
-converter = CurrencyConverter(
-    exchange_rate_api_url="https://api.exchangerate-api.com/v4/latest/USD",
-    cache_duration_hours=12,  # Cache untuk 12 jam
-    api_timeout=10  # Timeout 10 detik
-)
-
-result = converter.convert_to_usd_cents(150000, "IDR")
-print(result["amount_cents"])
+converter = CurrencyConverter()
+preview = converter.convert_to_usd_cents(150000, "IDR")
+print(preview)
 ```
 
 ---

@@ -18,7 +18,7 @@ Dokumentasi untuk TransactionWebhook - Kirim transaksi dan distribusi komisi.
 
 **Key Features:**
 - ✅ Multi-currency support (USD, EUR, GBP, IDR, dll)
-- ✅ Auto currency conversion
+- ✅ Server-side currency conversion (aktifkan `server_side_conversion` untuk amount non-USD)
 - ✅ Voucher/promo code support
 - ✅ Custom fields untuk metadata
 - ✅ Automatic commission calculation & distribution
@@ -34,13 +34,19 @@ Kirim transaksi ke HAVN untuk commission processing.
 
 ```python
 def send(
-    amount: float,
+    amount: int,
+    payment_gateway_transaction_id: str,
+    customer_email: str,
     referral_code: Optional[str] = None,
     promo_code: Optional[str] = None,
-    subtotal_transaction: Optional[float] = None,
+    subtotal_transaction: Optional[int] = None,
     currency: str = "USD",
     customer_type: str = "NEW_CUSTOMER",
     custom_fields: Optional[Dict[str, Any]] = None
+    invoice_id: Optional[str] = None,
+    transaction_type: Optional[str] = None,
+    description: Optional[str] = None,
+    server_side_conversion: bool = False,
 ) -> TransactionResponse
 ```
 
@@ -50,21 +56,25 @@ def send(
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `amount` | `float` | Yes | - | Jumlah transaksi final (dalam cents/smallest unit) |
-| `referral_code` | `str` | No | None | Referral code associate (HAVN-XX-XXX) |
-| `promo_code` | `str` | No | None | Voucher/promo code untuk diskon |
-| `subtotal_transaction` | `float` | No | None | Subtotal sebelum diskon (jika pakai voucher) |
-| `currency` | `str` | No | "USD" | Currency code (USD, EUR, GBP, IDR, dll) |
-| `customer_type` | `str` | No | "NEW_CUSTOMER" | "NEW_CUSTOMER" atau "RETURNING_CUSTOMER" |
-| `custom_fields` | `dict` | No | None | Custom metadata (max 10 fields) |
+| `amount` | `int` | Yes | - | Jumlah transaksi final dalam smallest unit currency yang dikirimkan. Kirim USD cents jika `currency="USD"`; untuk currency lain kirim nilai mentahnya dan aktifkan `server_side_conversion`. |
+| `payment_gateway_transaction_id` | `str` | Yes | - | ID transaksi dari payment gateway (maks 200 karakter). |
+| `customer_email` | `str` | Yes | - | Email customer yang valid. |
+| `referral_code` | `str` | No | None | Referral code associate (HAVN-XX-XXX). |
+| `promo_code` | `str` | No | None | Voucher/promo code untuk diskon (hanya HAVN voucher yang akan dikirim ke backend). |
+| `subtotal_transaction` | `int` | No | None | Subtotal sebelum diskon (mengikuti aturan currency yang sama dengan `amount`). |
+| `currency` | `str` | No | "USD" | Currency code (USD, EUR, GBP, IDR, dll). Backend akan mengkonversi ke USD jika `server_side_conversion=True`. |
+| `customer_type` | `str` | No | "NEW_CUSTOMER" | "NEW_CUSTOMER" atau "RETURNING_CUSTOMER". |
+| `custom_fields` | `dict` | No | None | Custom metadata (max 10 fields). |
+| `server_side_conversion` | `bool` | No | `False` | Aktifkan untuk meminta backend HAVN melakukan konversi currency resmi terhadap amount mentah Anda. |
 
 ### Parameter Details
 
 #### amount
-- **Type**: `float`
+- **Type**: `int`
 - **Required**: Yes
-- **Format**: Dalam cents atau smallest unit currency
-- **Example**: `10000` = $100.00 USD atau Rp 10.000 IDR
+- **Format**: Dalam smallest unit currency sesuai parameter `currency`
+- **Example**: `10000` = $100.00 USD (cents) atau Rp 10.000 IDR
+- **Non-USD**: Kirim nilai mentahnya (mis. rupiah) dan set `server_side_conversion=True` agar backend melakukan konversi resmi.
 
 #### referral_code
 - **Type**: `str`
@@ -81,7 +91,7 @@ def send(
 - **Type**: `str`
 - **Supported**: USD, EUR, GBP, IDR, SGD, MYR, THB, PHP, VND
 - **Default**: "USD"
-- **Note**: Auto-convert ke USD untuk commission calculation
+- **Note**: HAVN backend akan mengkonversi ke USD ketika `server_side_conversion=True`. Jika Anda sudah mengirim USD cents, biarkan flag tersebut `False`.
 
 #### customer_type
 - **Type**: `str`
@@ -101,6 +111,11 @@ def send(
       "customer_segment": "premium"
   }
   ```
+
+#### server_side_conversion
+- **Type**: `bool`
+- **Default**: `False`
+- **When to use**: Set `True` jika Anda mengirim `amount` dalam currency selain USD. SDK akan meneruskan nilai asli dan backend HAVN akan mengkonversi menggunakan kurs internal resmi.
 
 ---
 
@@ -170,7 +185,9 @@ client = HAVNClient(api_key="...", webhook_secret="...")
 # Transaksi basic
 result = client.transactions.send(
     amount=10000,  # $100.00
-    referral_code="HAVN-MJ-001"
+    referral_code="HAVN-MJ-001",
+    payment_gateway_transaction_id="stripe_txn_001",
+    customer_email="customer@example.com",
 )
 
 print(f"Transaction ID: {result.transaction.transaction_id}")
@@ -188,7 +205,9 @@ result = client.transactions.send(
     promo_code="VOUCHER123",
     referral_code="HAVN-MJ-001",
     currency="USD",
-    customer_type="NEW_CUSTOMER"
+    customer_type="NEW_CUSTOMER",
+    payment_gateway_transaction_id="stripe_txn_002",
+    customer_email="customer@example.com",
 )
 
 discount = result.transaction.subtotal_transaction - result.transaction.amount
@@ -202,11 +221,14 @@ print(f"Discount: ${discount/100:.2f}")
 result = client.transactions.send(
     amount=1000000,  # Rp 1.000.000
     referral_code="HAVN-MJ-001",
-    currency="IDR"
+    currency="IDR",
+    payment_gateway_transaction_id="midtrans_txn_003",
+    customer_email="customer@example.com",
+    server_side_conversion=True,
 )
 
-# Auto-convert ke USD untuk commission
-print(f"Amount: Rp {result.transaction.amount:,}")
+# Backend akan mengkonversi ke USD secara resmi untuk perhitungan komisi
+print(f"Amount (raw): Rp {result.transaction.amount:,}")
 print(f"Commission (USD): ${result.total_commission/100:.2f}")
 ```
 
@@ -217,6 +239,8 @@ print(f"Commission (USD): ${result.total_commission/100:.2f}")
 result = client.transactions.send(
     amount=10000,
     referral_code="HAVN-MJ-001",
+    payment_gateway_transaction_id="stripe_txn_004",
+    customer_email="customer@example.com",
     custom_fields={
         "order_id": "ORD123456",
         "payment_method": "credit_card",
@@ -239,7 +263,9 @@ try:
     result = client.transactions.send(
         amount=10000,
         referral_code="HAVN-MJ-001",
-        promo_code="INVALID_CODE"
+        promo_code="INVALID_CODE",
+        payment_gateway_transaction_id="stripe_txn_005",
+        customer_email="customer@example.com",
     )
 except HAVNValidationError as e:
     print(f"Validation error: {e}")
@@ -257,9 +283,24 @@ except HAVNAPIError as e:
 ```python
 # Loop multiple transactions
 transactions = [
-    {"amount": 10000, "referral_code": "HAVN-MJ-001"},
-    {"amount": 20000, "referral_code": "HAVN-SE-002"},
-    {"amount": 15000, "referral_code": "HAVN-MJ-001"},
+    {
+        "amount": 10000,
+        "referral_code": "HAVN-MJ-001",
+        "payment_gateway_transaction_id": "stripe_txn_006",
+        "customer_email": "user1@example.com",
+    },
+    {
+        "amount": 20000,
+        "referral_code": "HAVN-SE-002",
+        "payment_gateway_transaction_id": "stripe_txn_007",
+        "customer_email": "user2@example.com",
+    },
+    {
+        "amount": 15000,
+        "referral_code": "HAVN-MJ-001",
+        "payment_gateway_transaction_id": "stripe_txn_008",
+        "customer_email": "user3@example.com",
+    },
 ]
 
 results = []
@@ -286,7 +327,9 @@ client = HAVNClient(
 
 result = client.transactions.send(
     amount=10000,
-    referral_code="HAVN-MJ-001"
+    referral_code="HAVN-MJ-001",
+    payment_gateway_transaction_id="stripe_txn_009",
+    customer_email="customer@example.com",
 )
 
 # Response sukses tapi tidak tersimpan

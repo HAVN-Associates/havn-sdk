@@ -35,6 +35,7 @@ class VoucherListFilters:
         is_expired: Filter by expired status
         sort_by: Sort field (code, type, value, start_date, end_date, created_date, current_usage)
         sort_order: Sort direction (asc, desc)
+        display_currency: Target currency untuk konversi tampilan (opsional, ditangani backend)
     """
 
     page: Optional[int] = None
@@ -60,6 +61,7 @@ class VoucherListFilters:
     is_expired: Optional[bool] = None
     sort_by: Optional[str] = None
     sort_order: Optional[str] = None
+    display_currency: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for query params"""

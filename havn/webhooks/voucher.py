@@ -1,7 +1,6 @@
-"""
-Voucher webhook handler
-"""
+"""Voucher webhook handler"""
 
+import warnings
 from typing import Optional, Callable, List, Dict, Any
 from datetime import datetime, date
 from ..models.voucher import VoucherValidationPayload, VoucherListFilters
@@ -11,20 +10,11 @@ from ..models.voucher_list import (
     VoucherListPagination,
 )
 from ..exceptions import HAVNValidationError, HAVNAPIError
-from ..utils.currency import get_currency_converter
 from ..constants import (
-    USD_CURRENCY,
     HTTP_STATUS_NOT_FOUND,
     HTTP_STATUS_BAD_REQUEST,
     HTTP_STATUS_UNPROCESSABLE_ENTITY,
 )
-
-
-def _is_usd_currency(currency: str) -> bool:
-    """Check if currency is USD (DRY helper)"""
-    if not currency:
-        return False
-    return currency.upper().strip() == USD_CURRENCY
 
 
 def _build_voucher_error_message(status_code: int) -> str:
@@ -70,7 +60,7 @@ class VoucherWebhook:
         voucher_code: str,
         amount: Optional[int] = None,
         currency: Optional[str] = None,
-        auto_convert: bool = True,
+        auto_convert: Optional[bool] = None,
     ) -> bool:
         """
         Validate voucher code
@@ -80,10 +70,8 @@ class VoucherWebhook:
         - 400/404/422: Voucher is invalid
 
         **Currency Conversion:**
-        - If `auto_convert=True` (default) and `currency` differs from voucher currency,
-          SDK will automatically convert amount to voucher currency before validation.
-        - Original amount and currency info are preserved for audit.
-        - If `auto_convert=False`, amount is sent as-is and backend validates currency match.
+        - HAVN backend sekarang menangani seluruh konversi berdasarkan currency
+          yang dikirimkan. SDK cukup meneruskan nilai asli.
 
         Args:
             voucher_code: Voucher code to validate (required)
@@ -92,9 +80,8 @@ class VoucherWebhook:
                 - If `auto_convert=False`: amount in voucher currency (must match)
             currency: Source currency code (optional)
                 - Used only if `auto_convert=True` to convert amount to voucher currency
-            auto_convert: Whether to auto-convert amount to voucher currency (default: True)
-                - If True: Convert amount to voucher currency before validation
-                - If False: Send amount as-is (backend will validate currency match)
+            auto_convert: (Deprecated) Sudah tidak digunakan; backend melakukan
+                konversi otomatis. Parameter ini hanya dipertahankan demi kompatibilitas.
 
         Returns:
             True if voucher is valid
@@ -104,74 +91,26 @@ class VoucherWebhook:
             HAVNAPIError: If voucher is invalid or API request fails
 
         Example:
-            >>> # Valid voucher (auto-convert IDR to USD)
+            >>> # Valid voucher (backend handles conversion)
             >>> is_valid = client.vouchers.validate(
             ...     "HAVN-123",
-            ...     amount=150000,  # IDR rupiah
-            ...     currency="IDR",  # SDK converts to voucher currency (USD)
-            ...     auto_convert=True  # Default
-            ... )
-
-            >>> # Valid voucher (manual - amount already in voucher currency)
-            >>> is_valid = client.vouchers.validate(
-            ...     "HAVN-123",
-            ...     amount=10000,  # USD cents (matches voucher currency)
-            ...     currency="USD",
-            ...     auto_convert=False
+            ...     amount=150000,
+            ...     currency="IDR",
             ... )
         """
-        # Handle currency conversion if needed
-        amount_to_send = amount
-        currency_to_send = currency
-
-        # Auto-convert amount to voucher currency if enabled
-        if auto_convert and amount is not None and currency:
-            try:
-                # First, get voucher info to know its currency
-                # We'll fetch a single voucher to check its currency
-                vouchers_result = self.get_all(search=voucher_code, per_page=1)
-                voucher_info = None
-                if vouchers_result.data:
-                    # Find exact match
-                    for v in vouchers_result.data:
-                        if v.code.upper() == voucher_code.upper():
-                            voucher_info = v
-                            break
-
-                if voucher_info:
-                    voucher_currency = voucher_info.currency.upper().strip()
-                    source_currency = currency.upper().strip()
-
-                    # Convert if currencies differ
-                    if voucher_currency != source_currency:
-                        converter = get_currency_converter()
-
-                    # Convert source currency -> voucher currency
-                    # First convert to USD, then to voucher currency
-                    usd_result = converter.convert_to_usd_cents(amount, source_currency)
-                    usd_cents = usd_result["amount_cents"]
-
-                    # Convert from USD to voucher currency
-                    if not _is_usd_currency(voucher_currency):
-                        target_result = converter.convert_from_usd_cents(
-                            usd_cents, voucher_currency
-                        )
-                        amount_to_send = target_result["amount"]
-                    else:
-                        amount_to_send = usd_cents
-
-                    currency_to_send = voucher_currency
-
-            except (HAVNAPIError, ValueError):
-                # If conversion fails or voucher not found, fall back to original
-                # Backend will handle validation
-                pass
+        if auto_convert is not None:
+            warnings.warn(
+                "Parameter auto_convert sudah tidak digunakan. HAVN backend kini"
+                " melakukan konversi otomatis berdasarkan currency yang dikirimkan.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
         # Build payload
         payload = VoucherValidationPayload(
             voucher_code=voucher_code,
-            amount=amount_to_send,
-            currency=currency_to_send,
+            amount=amount,
+            currency=currency,
         )
 
         # Validate payload
@@ -251,11 +190,10 @@ class VoucherWebhook:
             is_expired: Filter by expired status (true/false)
             sort_by: Sort field (code, type, value, start_date, end_date, created_date, current_usage)
             sort_order: Sort direction (asc, desc) - default: desc
-            display_currency: Target currency for converting amounts (optional)
-                - If None: Amounts returned in original currency (USD for HAVN vouchers)
-                - If provided: All amounts (value, min_purchase, max_purchase, creation_cost)
-                  converted to target currency for display
-                - Only applies to HAVN vouchers (local vouchers keep their original currency)
+            display_currency: Target currency untuk ditampilkan (opsional)
+                - HAVN backend otomatis mengkonversi semua nilai voucher ke currency ini
+                - Jika None: backend mengembalikan currency asli (USD untuk HAVN vouchers)
+                - Local vouchers yang digabungkan via callback tetap memakai currency yang diberikan callback
 
         Returns:
             VoucherListResponse with paginated voucher data
@@ -312,6 +250,7 @@ class VoucherWebhook:
             is_expired=is_expired,
             sort_by=sort_by,
             sort_order=sort_order,
+            display_currency=display_currency,
         )
 
         # Validate filters
@@ -328,18 +267,7 @@ class VoucherWebhook:
                 endpoint="/api/v1/webhook/vouchers",
                 payload=filters.to_dict(),  # Pass as query params
             )
-            result = VoucherListResponse.from_dict(response_data)
-
-            # Convert amounts to display currency if requested
-            display_currency_upper = (
-                display_currency.upper().strip() if display_currency else None
-            )
-            if display_currency_upper and not _is_usd_currency(display_currency_upper):
-                result = self._convert_voucher_response_currency(
-                    result, display_currency_upper
-                )
-
-            return result
+            return VoucherListResponse.from_dict(response_data)
         except HAVNAPIError:
             raise
 
@@ -523,16 +451,6 @@ class VoucherWebhook:
         end_idx = start_idx + per_page_num
         # Performance: Direct slice, no list() conversion needed
         paginated_vouchers = combined_vouchers[start_idx:end_idx]
-
-        # Convert HAVN voucher amounts to display currency if requested
-        # (Local vouchers already in their original currency)
-        display_currency_upper = (
-            display_currency.upper().strip() if display_currency else None
-        )
-        if display_currency_upper and not _is_usd_currency(display_currency_upper):
-            paginated_vouchers = self._convert_voucher_list_currency(
-                paginated_vouchers, display_currency_upper
-            )
 
         # Create pagination object
         total_pages = (total + per_page_num - 1) // per_page_num if total > 0 else 0
@@ -855,199 +773,3 @@ class VoucherWebhook:
             # Fallback to original order if sorting fails
             return vouchers
 
-    def _convert_voucher_response_currency(
-        self, response: VoucherListResponse, target_currency: str
-    ) -> VoucherListResponse:
-        """
-        Convert voucher amounts in response to target currency
-
-        Only converts HAVN vouchers (local vouchers keep their original currency).
-
-        Args:
-            response: VoucherListResponse to convert
-            target_currency: Target currency code
-
-        Returns:
-            Modified VoucherListResponse with converted amounts
-        """
-        converted_vouchers = self._convert_voucher_list_currency(
-            response.data, target_currency
-        )
-
-        # Create new response with converted vouchers
-        return VoucherListResponse(
-            success=response.success,
-            message=response.message,
-            data=converted_vouchers,
-            pagination=response.pagination,
-            raw_response=response.raw_response,
-        )
-
-    def _create_converted_voucher_data(
-        self,
-        voucher: VoucherData,
-        converted_value: Dict[str, Any],
-        converted_min: Dict[str, Any],
-        converted_max: Optional[Dict[str, Any]],
-        converted_cost: Dict[str, Any],
-        target_currency: str,
-    ) -> VoucherData:
-        """
-        Create VoucherData with converted amounts (DRY helper)
-
-        Args:
-            voucher: Original VoucherData
-            converted_value: Converted value dict
-            converted_min: Converted min_purchase dict
-            converted_max: Converted max_purchase dict (optional)
-            converted_cost: Converted creation_cost dict
-            target_currency: Target currency code
-
-        Returns:
-            VoucherData with converted amounts
-        """
-        return VoucherData(
-            serial=voucher.serial,
-            saas_company_id=voucher.saas_company_id,
-            associate_id=voucher.associate_id,
-            code=voucher.code,
-            type=voucher.type,
-            value=converted_value["amount"],
-            usage_limit=voucher.usage_limit,
-            current_usage=voucher.current_usage,
-            min_purchase=converted_min["amount"],
-            max_purchase=converted_max["amount"] if converted_max else None,
-            start_date=voucher.start_date,
-            end_date=voucher.end_date,
-            active=voucher.active,
-            client_type=voucher.client_type,
-            description=voucher.description,
-            creation_cost=converted_cost["amount"],
-            created_by=voucher.created_by,
-            created_date=voucher.created_date,
-            updated_at=voucher.updated_at,
-            currency=target_currency,
-            affiliates_url=voucher.affiliates_url,
-            affiliates_qr_image=voucher.affiliates_qr_image,
-            is_expired=voucher.is_expired,
-            is_valid=voucher.is_valid,
-            remaining_usage=voucher.remaining_usage,
-            usage_percentage=voucher.usage_percentage,
-            associate=voucher.associate,
-            is_havn_voucher=voucher.is_havn_voucher,
-        )
-
-    def _convert_voucher_list_currency(
-        self, vouchers: List[VoucherData], target_currency: str
-    ) -> List[VoucherData]:
-        """
-        Convert voucher amounts in list to target currency
-
-        Only converts HAVN vouchers (local vouchers keep their original currency).
-
-        Args:
-            vouchers: List of VoucherData to convert
-            target_currency: Target currency code
-
-        Returns:
-            List of VoucherData with converted amounts
-        """
-        if not vouchers or _is_usd_currency(target_currency):
-            return vouchers
-
-        try:
-            converter = get_currency_converter()
-
-            converted_vouchers = []
-            for voucher in vouchers:
-                # Only convert HAVN vouchers (they're in USD)
-                # Local vouchers keep their original currency
-                if voucher.is_havn_voucher and _is_usd_currency(voucher.currency):
-                    try:
-                        # Convert USD cents to target currency
-                        # Convert value
-                        converted_value = converter.convert_from_usd_cents(
-                            voucher.value, target_currency
-                        )
-
-                        # Validate conversion result (check for suspiciously low rates)
-                        exchange_rate = converted_value.get("exchange_rate", 0)
-                        if (
-                            exchange_rate > 0
-                            and exchange_rate < 100
-                            and target_currency.upper() in ["IDR", "VND", "KRW"]
-                        ):
-                            # These currencies should have rates > 100, something is wrong
-                            import logging
-
-                            logging.error(
-                                f"Invalid exchange rate for {target_currency}: {exchange_rate}. "
-                                f"Expected > 100 for this currency type. "
-                                f"Voucher conversion may be incorrect.",
-                                extra={
-                                    "voucher_code": voucher.code,
-                                    "currency": target_currency,
-                                    "exchange_rate": exchange_rate,
-                                    "original_value_cents": voucher.value,
-                                    "converted_value": converted_value["amount"],
-                                },
-                            )
-
-                        # Convert min_purchase
-                        converted_min = converter.convert_from_usd_cents(
-                            voucher.min_purchase, target_currency
-                        )
-
-                        # Convert max_purchase if exists
-                        converted_max = None
-                        if voucher.max_purchase:
-                            converted_max = converter.convert_from_usd_cents(
-                                voucher.max_purchase, target_currency
-                            )
-
-                        # Convert creation_cost
-                        converted_cost = converter.convert_from_usd_cents(
-                            voucher.creation_cost, target_currency
-                        )
-
-                        # Create new voucher with converted amounts
-                        converted_voucher = self._create_converted_voucher_data(
-                            voucher=voucher,
-                            converted_value=converted_value,
-                            converted_min=converted_min,
-                            converted_max=converted_max,
-                            converted_cost=converted_cost,
-                            target_currency=target_currency,
-                        )
-                        converted_vouchers.append(converted_voucher)
-                    except (ValueError, KeyError) as e:
-                        # Log error but continue with other vouchers
-                        import logging
-
-                        logging.warning(
-                            f"Currency conversion failed for voucher {voucher.code}: {e}. "
-                            f"Keeping original USD amounts.",
-                            extra={
-                                "voucher_code": voucher.code,
-                                "currency": target_currency,
-                                "error": str(e),
-                            },
-                        )
-                        # Keep original voucher (USD) if conversion fails
-                        converted_vouchers.append(voucher)
-                else:
-                    # Local voucher - keep original currency
-                    converted_vouchers.append(voucher)
-
-            return converted_vouchers
-
-        except Exception as e:
-            # If conversion fails completely, return original vouchers
-            import logging
-
-            logging.warning(
-                f"Currency conversion failed for {target_currency}: {e}. "
-                "Returning original amounts.",
-                exc_info=False,
-            )
-            return vouchers

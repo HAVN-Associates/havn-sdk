@@ -51,6 +51,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive examples
 
 ## [Unreleased]
+
+## [1.1.5] - 2025-11-18
+
+### Changed
+- Transaction webhook kini menggunakan flag `server_side_conversion` untuk seluruh transaksi non-USD; SDK hanya meneruskan amount/currency mentah dan HAVN backend menjadi sumber kebenaran tunggal.
+- Voucher webhook (`validate`, `get_all`, `get_combined`) tidak lagi melakukan konversi lokal dan sepenuhnya mengandalkan parameter `display_currency` yang diproses backend.
+- Docstring serta contoh diperbarui agar sesuai dengan arsitektur server-side FX.
+
+### Deprecated
+- Helper `convert_to_usd_cents()` dan `convert_from_usd_cents()` hanya dipertahankan untuk kebutuhan tampilan/debugging dan akan dihapus pada rilis mayor berikutnya.
+- Parameter `auto_convert` pada voucher validation masih diterima namun menampilkan `DeprecationWarning`; tidak lagi mempengaruhi perilaku.
+
+### Documentation
+- README, API reference, dan seluruh dokumen terkait transaksi/voucher diperbarui untuk menekankan server-side conversion dan flag baru.
+- Contoh penggunaan non-USD kini menampilkan `server_side_conversion=True` serta menghapus referensi `auto_convert`.
 ## [1.1.2] - 2025-11-17
 
 ### Changed

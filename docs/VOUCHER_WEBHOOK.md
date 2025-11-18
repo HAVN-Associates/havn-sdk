@@ -25,7 +25,7 @@ Dokumentasi untuk VoucherWebhook - Validasi dan manajemen voucher/promo code.
 - ✅ Pagination & filtering
 - ✅ Search by code
 - ✅ Combine HAVN + local vouchers
-- ✅ Currency conversion untuk display
+- ✅ Display currency diproses langsung oleh backend HAVN
 
 ---
 
@@ -38,8 +38,8 @@ Validasi voucher code dengan amount dan currency.
 ```python
 def validate(
     voucher_code: str,
-    amount: float,
-    currency: str = "USD"
+    amount: Optional[int] = None,
+    currency: Optional[str] = None,
 ) -> bool
 ```
 
@@ -48,8 +48,8 @@ def validate(
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `voucher_code` | `str` | Yes | - | Kode voucher yang akan divalidasi |
-| `amount` | `float` | Yes | - | Transaction amount (cents/smallest unit) |
-| `currency` | `str` | No | "USD" | Currency code |
+| `amount` | `int` | No | `None` | Transaction amount dalam smallest unit currency Anda. Jika tidak dikirim, backend hanya mengecek status voucher. |
+| `currency` | `str` | No | `None` | Currency asal dari amount. Jika tidak diisi, backend mengasumsikan amount sudah berada pada currency voucher. |
 
 ### Returns
 
@@ -70,6 +70,12 @@ Voucher dianggap **valid** jika:
 - ✅ Amount >= min_purchase
 - ✅ Usage belum mencapai max_usage
 - ✅ Currency supported
+
+### Currency Handling
+
+- Backend HAVN adalah satu-satunya pihak yang melakukan konversi FX untuk voucher validation.
+- Kirim saja amount/currency mentah Anda; SDK tidak lagi melakukan auto-conversion.
+- Jika Anda hanya butuh mengecek status voucher, Anda dapat memanggil `validate()` tanpa `amount`.
 
 ---
 
@@ -99,7 +105,7 @@ def get_all(
 | `active` | `bool` | No | None | Filter by active status |
 | `is_valid` | `bool` | No | None | Filter by validity (not expired) |
 | `search` | `str` | No | None | Search by code (partial match) |
-| `display_currency` | `str` | No | None | Convert amounts untuk display |
+| `display_currency` | `str` | No | None | Minta backend HAVN mengembalikan HAVN vouchers dalam currency tertentu untuk display. |
 
 ### Returns
 
@@ -150,7 +156,7 @@ def get_combined(
 | `active` | `bool` | No | None | Filter by active |
 | `is_valid` | `bool` | No | None | Filter by validity |
 | `search` | `str` | No | None | Search by code |
-| `display_currency` | `str` | No | None | Currency untuk display |
+| `display_currency` | `str` | No | None | Currency tujuan untuk display; backend akan mengkonversi HAVN vouchers ke currency ini. |
 
 ### Local Voucher Format
 
@@ -239,16 +245,15 @@ for voucher in result.data:
 ### 5. Currency Conversion
 
 ```python
-# Get vouchers dengan currency conversion
+# Minta backend mengembalikan nilai HAVN voucher dalam IDR untuk display
 result = client.vouchers.get_all(
     active=True,
-    display_currency="IDR"  # Convert ke IDR
+    display_currency="IDR"
 )
 
 for voucher in result.data:
-    print(f"{voucher.code}:")
-    print(f"  Original: {voucher.value} {voucher.currency}")
-    print(f"  Display: {voucher.display_value} {voucher.display_currency}")
+    source = "HAVN" if voucher.is_havn_voucher else "Local"
+    print(f"{source} {voucher.code}: {voucher.value} {voucher.currency}")
 ```
 
 ### 6. Combine dengan Local Vouchers
@@ -322,12 +327,15 @@ result = client.vouchers.get_all(
 # Format untuk display
 vouchers_display = []
 for v in result.data:
-    discount_text = f"{v.value}%" if v.type == "DISCOUNT_PERCENTAGE" else f"Rp {v.display_value:,}"
-    
+    if v.type == "DISCOUNT_PERCENTAGE":
+        discount_text = f"{v.value}%"
+    else:
+        discount_text = f"Rp {v.value:,}"  # Backend sudah mengembalikan IDR
+
     vouchers_display.append({
         "code": v.code,
         "description": f"Diskon {discount_text}",
-        "min_purchase": f"Min. Rp {v.min_purchase_display:,}",
+        "min_purchase": f"Min. Rp {v.min_purchase:,}",
         "expires": v.valid_until
     })
 
@@ -401,7 +409,7 @@ vouchers = get_vouchers_cached(ttl_hash)
 ### 2. Error Handling
 
 ```python
-def validate_voucher_safe(code: str, amount: float, currency: str) -> bool:
+def validate_voucher_safe(code: str, amount: int, currency: str) -> bool:
     """Validate dengan error handling"""
     try:
         return client.vouchers.validate(
@@ -423,7 +431,7 @@ def validate_voucher_safe(code: str, amount: float, currency: str) -> bool:
 
 ```python
 # Selalu gunakan display_currency untuk UI
-user_currency = "IDR"  # From user settings
+user_currency = "IDR"  # Derived from user profile
 
 result = client.vouchers.get_all(
     active=True,
@@ -432,8 +440,7 @@ result = client.vouchers.get_all(
 )
 
 for voucher in result.data:
-    # Use display_value untuk UI
-    print(f"{voucher.code}: {voucher.display_value} {voucher.display_currency}")
+    print(f"{voucher.code}: {voucher.value} {voucher.currency}")
 ```
 
 ### 4. Combine Vouchers

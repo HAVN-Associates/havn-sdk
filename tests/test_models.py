@@ -70,6 +70,26 @@ class TestTransactionPayload:
         assert "referral_code" in data
         assert "promo_code" not in data  # None values removed
 
+    def test_server_side_conversion_flag(self):
+        """server_side_conversion must be boolean when provided"""
+        payload = TransactionPayload(
+            amount=12000,
+            payment_gateway_transaction_id="txn_flag",
+            customer_email="customer@example.com",
+            currency="IDR",
+            server_side_conversion=True,
+        )
+        payload.validate()  # Should not raise
+
+        invalid_payload = TransactionPayload(
+            amount=12000,
+            payment_gateway_transaction_id="txn_flag",
+            customer_email="customer@example.com",
+            server_side_conversion="yes",
+        )
+        with pytest.raises(ValueError, match="server_side_conversion must be a boolean"):
+            invalid_payload.validate()
+
 
 class TestUserSyncPayload:
     """Test UserSyncPayload model"""

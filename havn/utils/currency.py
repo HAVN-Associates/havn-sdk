@@ -5,12 +5,32 @@ Handles currency conversion with exchange rate caching and error handling.
 All amounts in HAVN are stored in USD cents (single source of truth).
 """
 
+import warnings
+
 import requests
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 from ..config import Config
 from ..constants import USD_CURRENCY
+
+# Minor unit mapping (number of decimal places for each currency)
+_CURRENCY_MINOR_UNITS = {
+    # Zero-decimal currencies
+    "IDR": 0,
+    "JPY": 0,
+    "KRW": 0,
+    "VND": 0,
+    "CLP": 0,
+    "ISK": 0,
+    # Three-decimal currencies commonly used in finance
+    "BHD": 3,
+    "JOD": 3,
+    "KWD": 3,
+    "OMR": 3,
+    "TND": 3,
+}
+_DEFAULT_MINOR_UNIT = 2
 
 
 class CurrencyConverter:
@@ -62,6 +82,11 @@ class CurrencyConverter:
 
         # In-memory cache: {currency: {"rate": Decimal, "fetched_at": datetime}}
         self._rate_cache: Dict[str, Dict[str, Any]] = {}
+
+    @staticmethod
+    def _get_minor_unit(currency: str) -> int:
+        """Return the number of minor units (decimal places) for a currency"""
+        return _CURRENCY_MINOR_UNITS.get(currency.upper(), _DEFAULT_MINOR_UNIT)
 
     def get_exchange_rate(
         self, to_currency: str, from_currency: str = BASE_CURRENCY
@@ -247,34 +272,15 @@ class CurrencyConverter:
         Returns:
             True if rate is valid, False otherwise
         """
-        # Expected rate ranges (1 USD = X currency)
-        # These are rough ranges to catch obvious errors
-        rate_ranges = {
-            "IDR": (1000, 50000),  # Usually ~15000
-            "JPY": (50, 300),  # Usually ~150
-            "KRW": (1000, 5000),  # Usually ~1300
-            "VND": (20000, 50000),  # Usually ~25000
-            "EUR": (0.5, 1.5),  # Usually ~0.85
-            "GBP": (0.5, 1.5),  # Usually ~0.75
-            "AUD": (0.5, 2.0),  # Usually ~1.5
-            "CAD": (0.5, 2.0),  # Usually ~1.3
-            "SGD": (0.8, 2.0),  # Usually ~1.35
-            "MYR": (3.0, 6.0),  # Usually ~4.5
-            "THB": (20, 60),  # Usually ~35
-            "PHP": (40, 80),  # Usually ~55
-            "INR": (60, 120),  # Usually ~83
-            "CNY": (5, 10),  # Usually ~7
-        }
+        # Dinamis: cukup pastikan rate positif, bukan NaN/inf, dan tidak ekstrem besar.
+        if rate.is_nan() or rate.is_infinite():
+            return False
 
-        currency_upper = currency.upper()
-        if currency_upper in rate_ranges:
-            min_rate, max_rate = rate_ranges[currency_upper]
-            if rate < Decimal(str(min_rate)) or rate > Decimal(str(max_rate)):
-                return False
+        if rate <= Decimal("0"):
+            return False
 
-        # For currencies not in the list, basic sanity check:
-        # Rate should be positive and not extremely large/small
-        if rate <= Decimal("0") or rate > Decimal("1000000"):
+        # Batasi upper bound secara longgar agar mencegah data API yang korup
+        if rate > Decimal("1000000000"):
             return False
 
         return True
@@ -310,22 +316,25 @@ class CurrencyConverter:
                 "Please ensure the currency is supported and API is accessible."
             )
 
-        # Convert to USD
-        # For currencies with same unit size as USD (e.g., EUR cents), direct conversion
-        # For currencies with different unit sizes (e.g., IDR), assume amount is in smallest unit
-        # Example: 150000 IDR = 150000 * rate = ~10 USD
-        amount_decimal = Decimal(str(amount)) * rate
+        minor_unit = self._get_minor_unit(from_currency)
+        scale = Decimal("10") ** minor_unit
+        amount_major = Decimal(str(amount)) / scale
 
-        # Convert to cents (multiply by 100)
-        # Round to nearest cent
-        amount_cents = int(round(amount_decimal * Decimal("100")))
+        # Convert to USD major unit
+        amount_usd = amount_major * rate
+
+        # Convert to cents and round half up for accuracy
+        amount_cents_decimal = (amount_usd * Decimal("100")).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
+        amount_cents = int(amount_cents_decimal)
 
         # Format currency string
-        amount_formatted = self._format_currency(float(amount_decimal), USD_CURRENCY)
+        amount_formatted = self._format_currency(amount_usd, USD_CURRENCY)
 
         return {
             "amount_cents": amount_cents,
-            "amount_decimal": float(amount_decimal),
+            "amount_decimal": float(amount_usd),
             "amount_formatted": amount_formatted,
             "currency": USD_CURRENCY,
             "exchange_rate": float(rate),
@@ -369,19 +378,23 @@ class CurrencyConverter:
         # Convert from cents to dollars first
         amount_usd = Decimal(str(amount_cents)) / Decimal("100")
 
-        # Convert to target currency
-        amount_target = amount_usd * rate
+        # Convert to target currency major unit
+        amount_target_major = amount_usd * rate
 
-        # Convert to target currency's smallest unit
-        # Round to nearest integer for precision (important for large numbers like IDR)
-        amount = int(round(amount_target))
+        minor_unit = self._get_minor_unit(to_currency)
+        scale = Decimal("10") ** minor_unit
+
+        amount_minor_decimal = (amount_target_major * scale).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
+        amount_minor = int(amount_minor_decimal)
 
         # Format currency string
-        amount_formatted = self._format_currency(float(amount_target), to_currency)
+        amount_formatted = self._format_currency(amount_target_major, to_currency)
 
         return {
-            "amount": amount,
-            "amount_decimal": float(amount_target),
+            "amount": amount_minor,
+            "amount_decimal": float(amount_target_major),
             "amount_formatted": amount_formatted,
             "currency": to_currency,
             "exchange_rate": float(rate),
@@ -389,19 +402,17 @@ class CurrencyConverter:
             "original_currency": USD_CURRENCY,
         }
 
-    @staticmethod
-    def _format_currency(amount: float, currency: str) -> str:
+    def _format_currency(self, amount: Decimal, currency: str) -> str:
         """
-        Format currency amount as string
+        Format currency amount as string respecting minor units
 
         Args:
-            amount: Amount as float
+            amount: Amount in major units as Decimal
             currency: Currency code
 
         Returns:
             Formatted string (e.g., "$10.00", "Rp 150.000")
         """
-        # Basic formatting (can be enhanced with locale-specific formatting)
         currency_symbols = {
             "USD": "$",
             "EUR": "€",
@@ -419,12 +430,15 @@ class CurrencyConverter:
         }
 
         symbol = currency_symbols.get(currency, currency)
+        minor_unit = self._get_minor_unit(currency)
 
-        # Format number with thousands separator
-        if amount >= 1000:
-            amount_str = f"{amount:,.2f}".rstrip("0").rstrip(".")
+        if minor_unit == 0:
+            normalized = amount.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+            amount_str = f"{int(normalized):,}"
         else:
-            amount_str = f"{amount:.2f}".rstrip("0").rstrip(".")
+            quant = Decimal("1") / (Decimal("10") ** minor_unit)
+            normalized = amount.quantize(quant, rounding=ROUND_HALF_UP)
+            amount_str = f"{normalized:,.{minor_unit}f}".rstrip("0").rstrip(".")
 
         return f"{symbol} {amount_str}"
 
@@ -462,6 +476,13 @@ def convert_to_usd_cents(amount: int, from_currency: str) -> Dict[str, Any]:
         >>> result = convert_to_usd_cents(150000, "IDR")
         >>> print(result["amount_cents"])  # ~1000 (USD cents)
     """
+    warnings.warn(
+        "convert_to_usd_cents is deprecated. HAVN backend kini yang melakukan konversi mata uang."
+        " Gunakan server_side_conversion pada webhook transaksi, dan hanya pakai helper ini untuk"
+        " kebutuhan tampilan/diagnostik sementara.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     converter = get_currency_converter()
     return converter.convert_to_usd_cents(amount, from_currency)
 
@@ -481,6 +502,12 @@ def convert_from_usd_cents(amount_cents: int, to_currency: str) -> Dict[str, Any
         >>> result = convert_from_usd_cents(1000, "IDR")
         >>> print(result["amount_formatted"])  # "Rp 150.000"
     """
+    warnings.warn(
+        "convert_from_usd_cents is deprecated. HAVN backend handle konversi resmi;"
+        " helper ini hanya untuk tampilan/diagnostik sementara.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     converter = get_currency_converter()
     return converter.convert_from_usd_cents(amount_cents, to_currency)
 

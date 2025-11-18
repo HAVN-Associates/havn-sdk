@@ -3,7 +3,7 @@ Voucher list models for HAVN SDK
 """
 
 from typing import Optional, Dict, Any, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 
 
 def is_havn_voucher_code(code: str) -> bool:
@@ -65,6 +65,7 @@ class VoucherData:
         updated_at: Updated date (ISO format)
         currency: Currency code
         configured_currency: Currency code yang dikonfigurasikan khusus untuk SaaS (opsional)
+        display_currency: Currency yang digunakan untuk tampilan (opsional, dari backend)
         affiliates_url: Affiliate URL (optional)
         affiliates_qr_image: QR code image URL (optional)
         is_expired: Whether voucher is expired
@@ -95,6 +96,7 @@ class VoucherData:
     updated_at: str = ""
     currency: str = "USD"
     configured_currency: Optional[str] = None
+    display_currency: Optional[str] = None
     affiliates_url: Optional[str] = None
     affiliates_qr_image: Optional[str] = None
     is_expired: bool = False
@@ -103,6 +105,7 @@ class VoucherData:
     usage_percentage: float = 0.0
     associate: Optional[Dict[str, Any]] = None
     is_havn_voucher: bool = False  # Flag to identify HAVN vs local voucher
+    raw_response: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "VoucherData":
@@ -117,7 +120,10 @@ class VoucherData:
         # Auto-detect HAVN voucher from code format
         code = voucher_data.get("code", "")
         voucher_data["is_havn_voucher"] = is_havn_voucher_code(code)
-        return cls(**voucher_data)
+        allowed_fields = {f.name for f in fields(cls)}
+        filtered_data = {k: v for k, v in voucher_data.items() if k in allowed_fields}
+        filtered_data.setdefault("raw_response", voucher_data)
+        return cls(**filtered_data)
 
 
 @dataclass

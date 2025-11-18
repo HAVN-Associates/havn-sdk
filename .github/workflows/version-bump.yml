@@ -104,7 +104,10 @@ jobs:
             BUMP_TYPE="${{ github.event.inputs.version_bump }}"
           else
             # Auto-detect dari commit message
-            COMMIT_MSG="${{ github.event.head_commit.message }}"
+            COMMIT_MSG=$(cat <<'EOF'
+${{ github.event.head_commit.message }}
+EOF
+)
             if [ -z "$COMMIT_MSG" ]; then
               BUMP_TYPE="patch"  # Default jika commit message kosong
             elif echo "$COMMIT_MSG" | grep -qiE "^(feat|feature)(\(.+\))?:"; then

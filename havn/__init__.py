@@ -35,7 +35,7 @@ from .utils.currency import (
     get_exchange_rate,
 )
 
-__version__ = "1.1.10"
+__version__ = "1.2.0"
 __author__ = "Bagus"
 __email__ = "bagus@intelove.com"
 

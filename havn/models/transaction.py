@@ -16,12 +16,12 @@ class TransactionPayload:
         payment_gateway_transaction_id: Payment gateway transaction ID (required)
         payment_gateway: Payment gateway identifier/name (required)
         customer_email: Customer email (required, valid email format)
-        referral_code: Associate referral code (optional)
+        referral_code: Associate referral code (required)
         promo_code: Voucher code (optional)
         currency: Currency code (default: USD)
-        customer_type: NEW_CUSTOMER or RECURRING (default: NEW_CUSTOMER)
+        customer_type: Optional manual override (NEW_CUSTOMER/RECURRING). HAVN backend auto-determines per customer.
         subtotal_transaction: Original amount before discount (optional)
-        acquisition_method: REFERRAL or REFERRAL_VOUCHER (optional, auto-determined)<br>- REFERRAL_VOUCHER: Jika ada promo_code DAN referral_code (keduanya wajib)<br>- REFERRAL: Jika hanya ada referral_code (tanpa promo_code)
+        acquisition_method: (Deprecated) Backend auto-determines. Leave as None.
         custom_fields: Custom metadata dict (max 3 entries) (optional)
         invoice_id: External invoice ID (optional)
         transaction_type: Transaction type (optional, untuk logging)
@@ -44,7 +44,7 @@ class TransactionPayload:
     referral_code: Optional[str] = None
     promo_code: Optional[str] = None
     currency: str = "USD"
-    customer_type: str = "NEW_CUSTOMER"
+    customer_type: Optional[str] = None
     subtotal_transaction: Optional[int] = None
     acquisition_method: Optional[str] = (
         None  # Optional: Auto-determined<br>- REFERRAL_VOUCHER: Jika ada promo_code DAN referral_code (keduanya wajib)<br>- REFERRAL: Jika hanya ada referral_code
@@ -83,14 +83,29 @@ class TransactionPayload:
         validate_custom_fields(self.custom_fields)
 
         # Validate referral_code
+        if self.referral_code is None or not isinstance(self.referral_code, str):
+            raise ValueError("referral_code is required and must be a string")
+
+        referral_clean = self.referral_code.strip()
+        if not referral_clean:
+            raise ValueError("referral_code is required and cannot be empty")
+
+        self.referral_code = referral_clean.upper()
         validate_referral_code(self.referral_code)
 
-        # Validate customer_type
-        if self.customer_type not in ["NEW_CUSTOMER", "RECURRING"]:
-            raise ValueError(
-                f"Invalid customer_type: {self.customer_type}. "
-                "Must be 'NEW_CUSTOMER' or 'RECURRING'"
-            )
+        # Validate customer_type (optional manual override)
+        if self.customer_type is not None:
+            normalized_type = self.customer_type.strip().upper()
+
+            if not normalized_type:
+                self.customer_type = None
+            elif normalized_type not in ["NEW_CUSTOMER", "RECURRING"]:
+                raise ValueError(
+                    f"Invalid customer_type: {self.customer_type}. "
+                    "Must be 'NEW_CUSTOMER' or 'RECURRING'"
+                )
+            else:
+                self.customer_type = normalized_type
 
         # Validate subtotal_transaction
         if self.subtotal_transaction is not None:
@@ -118,8 +133,10 @@ class TransactionPayload:
         if not self.payment_gateway or not self.payment_gateway.strip():
             raise ValueError("payment_gateway is required and cannot be empty")
 
-        if len(self.payment_gateway.strip()) > 100:
+        gateway_clean = self.payment_gateway.strip().upper()
+        if len(gateway_clean) > 100:
             raise ValueError("payment_gateway cannot exceed 100 characters")
+        self.payment_gateway = gateway_clean
 
         # Validate customer_email (required, non-empty, valid format)
         if not self.customer_email or not self.customer_email.strip():
@@ -131,6 +148,19 @@ class TransactionPayload:
             validate_email(self.customer_email)
         except ValueError as e:
             raise ValueError(f"Invalid customer_email format: {e}")
+
+        # Normalize invoice_id (optional, <= 100 chars)
+        if self.invoice_id is not None:
+            if not isinstance(self.invoice_id, str):
+                raise ValueError("invoice_id must be a string if provided")
+
+            invoice_clean = self.invoice_id.strip()
+            if not invoice_clean:
+                self.invoice_id = None
+            elif len(invoice_clean) > 100:
+                raise ValueError("invoice_id cannot exceed 100 characters")
+            else:
+                self.invoice_id = invoice_clean
 
         # Validate acquisition_method (optional, but must be valid if provided)
         if self.acquisition_method:

@@ -36,12 +36,13 @@ Kirim transaksi ke HAVN untuk commission processing.
 def send(
     amount: int,
     payment_gateway_transaction_id: str,
+    payment_gateway: str,
     customer_email: str,
-    referral_code: Optional[str] = None,
+    referral_code: str,
     promo_code: Optional[str] = None,
     subtotal_transaction: Optional[int] = None,
     currency: str = "USD",
-    customer_type: str = "NEW_CUSTOMER",
+    customer_type: Optional[str] = None,
     custom_fields: Optional[Dict[str, Any]] = None
     invoice_id: Optional[str] = None,
     transaction_type: Optional[str] = None,
@@ -49,6 +50,8 @@ def send(
     server_side_conversion: bool = False,
 ) -> TransactionResponse
 ```
+
+> **Keyword-only safety**: Semua parameter setelah `payment_gateway_transaction_id` wajib dikirim menggunakan keyword argument agar tidak terjadi pergeseran posisi ketika ada update parameter baru.
 
 ---
 
@@ -58,13 +61,17 @@ def send(
 |-----------|------|----------|---------|-------------|
 | `amount` | `int` | Yes | - | Jumlah transaksi final dalam smallest unit currency yang dikirimkan. Kirim USD cents jika `currency="USD"`; untuk currency lain kirim nilai mentahnya dan aktifkan `server_side_conversion`. |
 | `payment_gateway_transaction_id` | `str` | Yes | - | ID transaksi dari payment gateway (maks 200 karakter). |
+| `payment_gateway` | `str` | Yes | - | Nama/identifier payment gateway (mis. `MIDTRANS`, `STRIPE`). |
 | `customer_email` | `str` | Yes | - | Email customer yang valid. |
-| `referral_code` | `str` | No | None | Referral code associate (HAVN-XX-XXX). |
+| `referral_code` | `str` | Yes | - | Referral code associate (wajib). HAVN menggunakan kode ini untuk menentukan komisi dan upline. |
 | `promo_code` | `str` | No | None | Voucher/promo code untuk diskon (hanya HAVN voucher yang akan dikirim ke backend). |
 | `subtotal_transaction` | `int` | No | None | Subtotal sebelum diskon (mengikuti aturan currency yang sama dengan `amount`). |
 | `currency` | `str` | No | "USD" | Currency code (USD, EUR, GBP, IDR, dll). Backend akan mengkonversi ke USD jika `server_side_conversion=True`. |
-| `customer_type` | `str` | No | "NEW_CUSTOMER" | "NEW_CUSTOMER" atau "RETURNING_CUSTOMER". |
-| `custom_fields` | `dict` | No | None | Custom metadata (max 10 fields). |
+| `customer_type` | `str` | No | `None` | Opsional. HAVN otomatis menandai transaksi pertama per (SaaS company + email) sebagai `NEW_CUSTOMER`, dan transaksi berikutnya sebagai `RECURRING`. Isi hanya jika Anda butuh override manual sementara — backend tetap menjadi sumber kebenaran. |
+| `custom_fields` | `dict` | No | None | Custom metadata (maks 3 entri). Nilai harus string/number/boolean. |
+| `invoice_id` | `str` | No | `None` | Nomor invoice eksternal. Jika tidak tersedia, biarkan kosong agar HAVN tidak mengisi nilai placeholder. Maks 100 karakter. |
+| `transaction_type` | `str` | No | `None` | Label bebas untuk kebutuhan logging/reporting (mis. `SUBSCRIPTION`). |
+| `description` | `str` | No | `None` | Deskripsi transaksi untuk catatan internal. |
 | `server_side_conversion` | `bool` | No | `False` | Aktifkan untuk meminta backend HAVN melakukan konversi currency resmi terhadap amount mentah Anda. |
 
 ### Parameter Details
@@ -78,9 +85,10 @@ def send(
 
 #### referral_code
 - **Type**: `str`
+- **Required**: Yes
 - **Format**: `HAVN-XX-XXX` (2 huruf + 3 digit)
 - **Example**: `"HAVN-MJ-001"`, `"HAVN-SE-123"`
-- **Note**: Akan di-uppercase otomatis
+- **Note**: Akan di-uppercase otomatis. Promo code HAVN hanya dapat digunakan jika referral code disertakan.
 
 #### promo_code
 - **Type**: `str`
@@ -95,22 +103,31 @@ def send(
 
 #### customer_type
 - **Type**: `str`
-- **Options**: 
-  - `"NEW_CUSTOMER"` - First-time buyer
-  - `"RETURNING_CUSTOMER"` - Repeat buyer
-- **Impact**: Affects commission rate
+- **Default**: `None` (HAVN auto-determines)
+- **Auto logic**: HAVN backend mengecek histori transaksi berdasarkan kombinasi SaaS company + email:
+  - Transaksi pertama → otomatis `NEW_CUSTOMER`
+  - Transaksi berikutnya → otomatis `RECURRING`
+- **Manual override**: Anda *boleh* mengisi `"NEW_CUSTOMER"` atau `"RECURRING"` untuk kebutuhan debugging sementara, namun backend tetap mengoverride jika tidak sesuai dengan histori.
+- **Impact**: Menentukan tier komisi. Karena backend yang mengontrol, Anda tidak perlu menjaga status ini sendiri.
 
 #### custom_fields
 - **Type**: `dict`
-- **Max fields**: 10
+- **Max fields**: 3
 - **Example**:
   ```python
   {
       "order_id": "ORD123456",
       "payment_method": "credit_card",
-      "customer_segment": "premium"
+      "campaign": "black_friday_2024"
   }
   ```
+- **Allowed values**: string, number, atau boolean. Gunakan field ini untuk metadata penting seperti `order_id`, `payment_method`, atau `project_id`.
+
+#### invoice_id
+- **Type**: `str`
+- **Required**: No
+- **Max length**: 100 karakter
+- **Note**: Hanya kirimkan bila Anda memiliki nomor invoice nyata. Jika tidak, biarkan `None` supaya HAVN tidak menyamakan dengan `payment_gateway_transaction_id`.
 
 #### server_side_conversion
 - **Type**: `bool`
@@ -187,6 +204,7 @@ result = client.transactions.send(
     amount=10000,  # $100.00
     referral_code="HAVN-MJ-001",
     payment_gateway_transaction_id="stripe_txn_001",
+    payment_gateway="STRIPE",
     customer_email="customer@example.com",
 )
 
@@ -203,11 +221,11 @@ result = client.transactions.send(
     amount=8000,  # $80.00 (setelah diskon)
     subtotal_transaction=10000,  # $100.00 (sebelum diskon)
     promo_code="VOUCHER123",
+    payment_gateway_transaction_id="stripe_txn_002",
+    payment_gateway="STRIPE",
+    customer_email="customer@example.com",
     referral_code="HAVN-MJ-001",
     currency="USD",
-    customer_type="NEW_CUSTOMER",
-    payment_gateway_transaction_id="stripe_txn_002",
-    customer_email="customer@example.com",
 )
 
 discount = result.transaction.subtotal_transaction - result.transaction.amount
@@ -222,6 +240,7 @@ result = client.transactions.send(
     amount=1000000,  # Rp 1.000.000
     referral_code="HAVN-MJ-001",
     currency="IDR",
+    payment_gateway="MIDTRANS",
     payment_gateway_transaction_id="midtrans_txn_003",
     customer_email="customer@example.com",
     server_side_conversion=True,
@@ -240,11 +259,11 @@ result = client.transactions.send(
     amount=10000,
     referral_code="HAVN-MJ-001",
     payment_gateway_transaction_id="stripe_txn_004",
+    payment_gateway="STRIPE",
     customer_email="customer@example.com",
     custom_fields={
         "order_id": "ORD123456",
         "payment_method": "credit_card",
-        "customer_segment": "premium",
         "campaign": "black_friday_2024"
     }
 )

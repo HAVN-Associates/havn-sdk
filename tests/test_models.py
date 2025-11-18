@@ -43,6 +43,7 @@ class TestTransactionPayload:
             payment_gateway_transaction_id="txn_12345",
             payment_gateway="STRIPE",
             customer_email="customer@example.com",
+            referral_code="HAVN-MJ-001",
             currency="XYZ"
         )
         with pytest.raises(ValueError, match="Unsupported currency code"):
@@ -55,6 +56,7 @@ class TestTransactionPayload:
             payment_gateway_transaction_id="txn_12345",
             payment_gateway="STRIPE",
             customer_email="customer@example.com",
+            referral_code="HAVN-MJ-001",
             customer_type="INVALID",
         )
         with pytest.raises(ValueError, match="Invalid customer_type"):
@@ -67,6 +69,7 @@ class TestTransactionPayload:
             payment_gateway_transaction_id="txn_12345",
             payment_gateway="",
             customer_email="customer@example.com",
+            referral_code="HAVN-MJ-001",
         )
         with pytest.raises(ValueError, match="payment_gateway is required"):
             payload.validate()
@@ -93,6 +96,7 @@ class TestTransactionPayload:
             payment_gateway_transaction_id="txn_flag",
             payment_gateway="MIDTRANS",
             customer_email="customer@example.com",
+            referral_code="HAVN-MJ-001",
             currency="IDR",
             server_side_conversion=True,
         )
@@ -103,10 +107,48 @@ class TestTransactionPayload:
             payment_gateway_transaction_id="txn_flag",
             payment_gateway="MIDTRANS",
             customer_email="customer@example.com",
+            referral_code="HAVN-MJ-001",
             server_side_conversion="yes",
         )
         with pytest.raises(ValueError, match="server_side_conversion must be a boolean"):
             invalid_payload.validate()
+
+    def test_missing_referral_code(self):
+        """referral_code is required"""
+        payload = TransactionPayload(
+            amount=10000,
+            payment_gateway_transaction_id="txn_12345",
+            payment_gateway="STRIPE",
+            customer_email="customer@example.com",
+        )
+
+        with pytest.raises(ValueError, match="referral_code is required"):
+            payload.validate()
+
+    def test_invoice_id_trim_and_length(self):
+        """invoice_id must be trimmed and <= 100 chars"""
+        payload = TransactionPayload(
+            amount=10000,
+            payment_gateway_transaction_id="txn_trim",
+            payment_gateway="STRIPE",
+            customer_email="customer@example.com",
+            referral_code="HAVN-MJ-001",
+            invoice_id="  INV-001  ",
+        )
+        payload.validate()
+        assert payload.invoice_id == "INV-001"
+
+        too_long = "X" * 101
+        payload_long = TransactionPayload(
+            amount=10000,
+            payment_gateway_transaction_id="txn_long",
+            payment_gateway="STRIPE",
+            customer_email="customer@example.com",
+            referral_code="HAVN-MJ-001",
+            invoice_id=too_long,
+        )
+        with pytest.raises(ValueError, match="invoice_id cannot exceed 100 characters"):
+            payload_long.validate()
 
 
 class TestUserSyncPayload:

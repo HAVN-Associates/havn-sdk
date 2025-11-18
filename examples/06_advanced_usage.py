@@ -18,6 +18,7 @@ def use_context_manager():
         result = client.transactions.send(
             amount=10000,
             payment_gateway_transaction_id="stripe_001",
+            payment_gateway="STRIPE",
             customer_email="customer@example.com",
             referral_code="HAVN-MJ-001",
         )
@@ -60,18 +61,21 @@ def batch_transactions():
         {
             "amount": 5000,
             "payment_gateway_transaction_id": "stripe_001",
+            "payment_gateway": "STRIPE",
             "customer_email": "customer1@example.com",
             "referral_code": "HAVN-MJ-001",
         },
         {
             "amount": 7500,
             "payment_gateway_transaction_id": "stripe_002",
+            "payment_gateway": "STRIPE",
             "customer_email": "customer2@example.com",
             "referral_code": "HAVN-MJ-001",
         },
         {
             "amount": 10000,
             "payment_gateway_transaction_id": "stripe_003",
+            "payment_gateway": "STRIPE",
             "customer_email": "customer3@example.com",
             "referral_code": "HAVN-MJ-002",
         },
@@ -126,12 +130,12 @@ def transaction_with_all_fields():
             # Required
             amount=10000,  # $100.00 in cents
             payment_gateway_transaction_id="PG123456789",
+            payment_gateway="MIDTRANS",
             customer_email="customer@example.com",
             # Optional
             referral_code="HAVN-MJ-001",
             promo_code="VOUCHER123",
             currency="USD",
-            customer_type="NEW_CUSTOMER",
             subtotal_transaction=12000,  # Before discount
             custom_fields={
                 "order_id": "ORD123456",

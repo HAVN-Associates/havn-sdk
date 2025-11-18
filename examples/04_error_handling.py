@@ -26,6 +26,7 @@ def handle_validation_errors():
         result = client.transactions.send(
             amount=-100,  # Invalid: negative amount
             payment_gateway_transaction_id="stripe_test",
+            payment_gateway="STRIPE",
             customer_email="customer@example.com",
             referral_code="HAVN-MJ-001",
         )
@@ -48,6 +49,7 @@ def handle_authentication_errors():
         result = bad_client.transactions.send(
             amount=10000,
             payment_gateway_transaction_id="stripe_test",
+            payment_gateway="STRIPE",
             customer_email="customer@example.com",
             referral_code="HAVN-MJ-001",
         )
@@ -85,6 +87,7 @@ def handle_network_errors():
         result = bad_client.transactions.send(
             amount=10000,
             payment_gateway_transaction_id="stripe_test",
+            payment_gateway="STRIPE",
             customer_email="customer@example.com",
             referral_code="HAVN-MJ-001",
         )
@@ -103,6 +106,7 @@ def handle_all_errors():
         result = client.transactions.send(
             amount=10000,
             payment_gateway_transaction_id="stripe_test",
+            payment_gateway="STRIPE",
             customer_email="customer@example.com",
             referral_code="HAVN-MJ-001",
             custom_fields={"key": "value"},

@@ -165,13 +165,13 @@ Send transaction ke HAVN API.
 client.transactions.send(
     amount: int,
     payment_gateway_transaction_id: str,
+    payment_gateway: str,
     customer_email: str,
-    referral_code: Optional[str] = None,
+    referral_code: str,
     promo_code: Optional[str] = None,
     currency: str = "USD",
-    customer_type: str = "NEW_CUSTOMER",
+    customer_type: Optional[str] = None,
     subtotal_transaction: Optional[int] = None,
-    acquisition_method: Optional[str] = None,
     custom_fields: Optional[Dict[str, Any]] = None,
     invoice_id: Optional[str] = None,
     transaction_type: Optional[str] = None,
@@ -180,21 +180,23 @@ client.transactions.send(
 ) -> TransactionResponse
 ```
 
+> **Keyword-only:** Semua parameter setelah `payment_gateway_transaction_id` harus dipanggil menggunakan keyword argument agar kompatibel ketika SDK menambah parameter baru.
+
 #### Parameters
 
 | Parameter                        | Type   | Required | Default          | Description                                                                                                                                                                                                                                                                                                  |
 | -------------------------------- | ------ | -------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `amount`                         | `int`  | ✅ Yes   | -                | Final transaction amount dalam smallest unit currency yang dikirimkan.<br>- Jika mengirim USD: isi dalam USD cents.<br>- Jika mengirim currency lain, kirim nilai mentahnya dan set `server_side_conversion=True` agar backend HAVN melakukan konversi resmi.                                         |
 | `payment_gateway_transaction_id` | `str`  | ✅ Yes   | -                | Payment gateway transaction ID (required, non-empty, max 200 characters)                                                                                                                                                                                                                                     |
+| `payment_gateway`                | `str`  | ✅ Yes   | -                | Payment gateway identifier/name (mis. `MIDTRANS`, `STRIPE`). Wajib diisi dan akan divalidasi terhadap konfigurasi SaaS company.                                                                                                                                                                              |
 | `customer_email`                 | `str`  | ✅ Yes   | -                | Customer email (required, valid email format)                                                                                                                                                                                                                                                                |
-| `referral_code`                  | `str`  | No       | `None`           | Associate referral code                                                                                                                                                                                                                                                                                      |
+| `referral_code`                  | `str`  | ✅ Yes   | -                | Associate referral code (wajib). HAVN menggunakan kode ini untuk identitas komisi.                                                                                                                                                                                                                            |
 | `promo_code`                     | `str`  | No       | `None`           | Voucher code (HAVN atau local)                                                                                                                                                                                                                                                                               |
 | `currency`                       | `str`  | No       | `"USD"`          | Currency code (ISO 4217, 3 uppercase letters)                                                                                                                                                                                                                                                                |
-| `customer_type`                  | `str`  | No       | `"NEW_CUSTOMER"` | `"NEW_CUSTOMER"` atau `"RECURRING"`                                                                                                                                                                                                                                                                          |
+| `customer_type`                  | `str`  | No       | `None`           | Opsional manual override. HAVN backend otomatis menandai transaksi pertama per (SaaS company + email) sebagai `NEW_CUSTOMER`, dan transaksi berikutnya sebagai `RECURRING`. Isi hanya jika Anda butuh overriding sementara — backend tetap menjadi single source of truth.                                    |
 | `subtotal_transaction`           | `int`  | No       | `None`           | Original amount sebelum discount (mengikuti aturan currency yang sama dengan `amount`)                                                                                                                                                                                                                       |
-| `acquisition_method`             | `str`  | No       | `None`           | `"REFERRAL"` atau `"REFERRAL_VOUCHER"` (optional, auto-determined)<br>- `REFERRAL_VOUCHER`: Jika ada `promo_code` DAN `referral_code` (keduanya wajib)<br>- `REFERRAL`: Jika hanya ada `referral_code` (tanpa `promo_code`)<br>- Tidak ada `"VOUCHER"` standalone (voucher selalu dikaitkan dengan referral) |
-| `custom_fields`                  | `dict` | No       | `None`           | Custom metadata (max 3 entries, string/number/boolean values)                                                                                                                                                                                                                                                |
-| `invoice_id`                     | `str`  | No       | `None`           | External invoice ID                                                                                                                                                                                                                                                                                          |
+| `custom_fields`                  | `dict` | No       | `None`           | Custom metadata (maks 3 entries, string/number/boolean values)                                                                                                                                                                                                                                               |
+| `invoice_id`                     | `str`  | No       | `None`           | External invoice ID (opsional, maks 100 karakter). Jika tidak ada nomor invoice, biarkan kosong agar tidak terisi dengan payment gateway transaction ID.                                                                                                                                                     |
 | `transaction_type`               | `str`  | No       | `None`           | Transaction type (untuk logging)                                                                                                                                                                                                                                                                             |
 | `description`                    | `str`  | No       | `None`           | Transaction description                                                                                                                                                                                                                                                                                      |
 | `server_side_conversion`         | `bool` | No       | `False`          | Flag untuk meminta backend melakukan konversi currency resmi.<br>- `True`: SDK mengirim amount/currency apa adanya; backend menghitung ulang dengan kurs internal.<br>- `False`: Gunakan hanya jika amount sudah dalam USD cents dan tidak perlu konversi backend.                                         |
@@ -228,7 +230,10 @@ client.transactions.send(
 result = client.transactions.send(
     amount=10000,  # $100.00 in cents
     referral_code="HAVN-MJ-001",
-    currency="USD"
+    currency="USD",
+    payment_gateway_transaction_id="stripe_txn_001",
+    payment_gateway="STRIPE",
+    customer_email="customer@example.com",
 )
 
 print(f"Transaction ID: {result.transaction.transaction_id}")
@@ -245,7 +250,9 @@ result = client.transactions.send(
     promo_code="VOUCHER123",
     referral_code="HAVN-MJ-001",
     currency="USD",
-    customer_type="NEW_CUSTOMER"
+    payment_gateway_transaction_id="stripe_txn_002",
+    payment_gateway="STRIPE",
+    customer_email="customer@example.com",
 )
 
 print(f"Discount: ${result.transaction.subtotal_discount / 100:.2f}")
@@ -264,6 +271,8 @@ result = client.transactions.send(
         "customer_segment": "premium"
     },
     invoice_id="INV-2024-001",
+    payment_gateway_transaction_id="stripe_txn_003",
+    payment_gateway="STRIPE",
     customer_email="customer@example.com"
 )
 ```
@@ -277,6 +286,7 @@ result = client.transactions.send(
     currency="IDR",
     referral_code="HAVN-MJ-001",
     payment_gateway_transaction_id="stripe_111222333",
+    payment_gateway="MIDTRANS",
     customer_email="customer@example.com",
     server_side_conversion=True,
 )
@@ -292,6 +302,7 @@ result = client.transactions.send(
     currency="USD",
     referral_code="HAVN-MJ-001",
     payment_gateway_transaction_id="stripe_444555666",
+    payment_gateway="STRIPE",
     customer_email="customer@example.com",
     server_side_conversion=False,  # default
 )
@@ -304,8 +315,11 @@ result = client.transactions.send(
     amount=5000,  # $50.00 monthly
     referral_code="HAVN-MJ-001",
     currency="USD",
-    customer_type="RECURRING",
-    description="Monthly subscription"
+    payment_gateway_transaction_id="stripe_sub_001",
+    payment_gateway="STRIPE",
+    customer_email="customer@example.com",
+    description="Monthly subscription",
+    customer_type="RECURRING",  # Optional override; HAVN auto-detects based on history
 )
 ```
 
@@ -1048,13 +1062,14 @@ Payload untuk transaction webhook.
 
 - `amount` (`int`): Final transaction amount dalam cents
 - `payment_gateway_transaction_id` (`str`): Payment gateway transaction ID (required, non-empty, max 200 characters)
+- `payment_gateway` (`str`): Payment gateway name/identifier (required, max 100 characters)
 - `customer_email` (`str`): Customer email (required, valid email format)
-- `referral_code` (`Optional[str]`): Associate referral code
+- `referral_code` (`str`): Associate referral code (required)
 - `promo_code` (`Optional[str]`): Voucher code
 - `currency` (`str`): Currency code (default: "USD")
-- `customer_type` (`str`): "NEW_CUSTOMER" atau "RECURRING" (default: "NEW_CUSTOMER")
+- `customer_type` (`Optional[str]`): Manual override (HAVN otomatis menentukan berdasarkan histori)
 - `subtotal_transaction` (`Optional[int]`): Original amount sebelum discount
-- `acquisition_method` (`Optional[str]`): "REFERRAL" atau "REFERRAL_VOUCHER" (optional, auto-determined from promo_code/referral_code)<br>- `REFERRAL_VOUCHER`: Jika ada `promo_code` DAN `referral_code` (keduanya wajib)<br>- `REFERRAL`: Jika hanya ada `referral_code` (tanpa `promo_code`)
+- `acquisition_method` (`Optional[str]`): Diisi oleh backend untuk kebutuhan audit (REFERRAL vs REFERRAL_VOUCHER). Tidak perlu dikirim dari SDK.
 - `custom_fields` (`Optional[Dict[str, Any]]`): Custom metadata (max 3 entries)
 - `invoice_id` (`Optional[str]`): External invoice ID
 - `transaction_type` (`Optional[str]`): Transaction type (untuk logging)
@@ -1071,7 +1086,7 @@ Transaction data dari response.
 - `currency` (`str`): Currency code
 - `status` (`str`): Transaction status
 - `customer_type` (`str`): Customer type
-- `acquisition_method` (`Optional[str]`): Acquisition method
+- `acquisition_method` (`Optional[str]`): Acquisition method yang diisi oleh backend (REFERRAL / REFERRAL_VOUCHER)
 - `subtotal_transaction` (`Optional[int]`): Subtotal sebelum discount
 - `subtotal_discount` (`Optional[int]`): Discount amount
 - `created_at` (`Optional[str]`): Created timestamp

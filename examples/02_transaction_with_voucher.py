@@ -26,12 +26,12 @@ def send_transaction_with_voucher():
         result = client.transactions.send(
             amount=8000,  # After discount: $80.00
             payment_gateway_transaction_id="stripe_9876543210",  # Required
+            payment_gateway="STRIPE",
             customer_email="customer@example.com",  # Required
             subtotal_transaction=10000,  # Before discount: $100.00
             promo_code="VOUCHER123",  # Voucher code
             referral_code="HAVN-MJ-001",  # Associate referral code
             currency="USD",
-            customer_type="NEW_CUSTOMER",
             custom_fields={
                 "order_id": "ORD123456",
                 "payment_method": "credit_card",

@@ -36,14 +36,14 @@ class TransactionWebhook:
         self,
         amount: int,
         payment_gateway_transaction_id: str,
+        *,
         payment_gateway: str,
         customer_email: str,
-        referral_code: Optional[str] = None,
+        referral_code: str,
         promo_code: Optional[str] = None,
         currency: str = "USD",
-        customer_type: str = "NEW_CUSTOMER",
+        customer_type: Optional[str] = None,
         subtotal_transaction: Optional[int] = None,
-        acquisition_method: Optional[str] = None,
         custom_fields: Optional[Dict[str, Any]] = None,
         invoice_id: Optional[str] = None,
         transaction_type: Optional[str] = None,
@@ -72,19 +72,16 @@ class TransactionWebhook:
                 - Max 200 characters
             payment_gateway: Payment gateway identifier/name (required, e.g., "MIDTRANS", "STRIPE")
             customer_email: Customer email (required, valid email format)
-            referral_code: Associate referral code (optional)
+            referral_code: Associate referral code (required)
             promo_code: Voucher code (HAVN or local).
                 - If HAVN voucher (starts with "HAVN-"): will be sent to API (referral_code + promo_code)
                 - If local voucher: will NOT be sent (only referral_code sent)
             currency: Currency code (default: USD)
-            customer_type: NEW_CUSTOMER or RECURRING (default: NEW_CUSTOMER)
+            customer_type: Optional override (NEW_CUSTOMER / RECURRING). HAVN auto-detects history.
+                marks the first transaction per (SaaS company, email) as NEW and subsequent ones as
             subtotal_transaction: Original amount before discount (optional)
                 - Same currency rules as amount
-            acquisition_method: REFERRAL or REFERRAL_VOUCHER (optional, auto-determined)
-                - REFERRAL_VOUCHER: Jika ada promo_code DAN referral_code (keduanya wajib)
-                - REFERRAL: Jika hanya ada referral_code (tanpa promo_code)
-                - Tidak ada "VOUCHER" standalone (voucher selalu dikaitkan dengan referral)
-                - Jika tidak disediakan, akan auto-determined dari promo_code/referral_code
+            custom_fields: Custom metadata (max 3 entries) (optional)
             custom_fields: Custom metadata (max 3 entries) (optional)
             invoice_id: External invoice ID (optional)
             transaction_type: Transaction type (optional, untuk logging)
@@ -133,14 +130,7 @@ class TransactionWebhook:
             ...     # acquisition_method akan auto-determined sebagai REFERRAL
             ... )
             >>>
-            >>> # Recurring transaction (customer_type="RECURRING")
-            >>> result = client.transactions.send(
-            ...     amount=10000,
-            ...     payment_gateway_transaction_id="stripe_444555666",
-            ...     customer_email="customer@example.com",
-            ...     customer_type="RECURRING",
-            ...     referral_code="HAVN-MJ-001"
-            ... )
+            >>> # Customer type is auto-determined by HAVN backend. No manual flag needed.
         """
         if not payment_gateway or not payment_gateway.strip():
             raise HAVNValidationError(
@@ -149,16 +139,9 @@ class TransactionWebhook:
 
         gateway_name = payment_gateway.strip().upper()
 
-        # Auto-determine acquisition_method if not provided (before voucher check)
-        if not acquisition_method:
-            if promo_code and is_havn_voucher_code(promo_code) and referral_code:
-                # REFERRAL_VOUCHER requires both promo_code and referral_code
-                acquisition_method = "REFERRAL_VOUCHER"
-            elif referral_code:
-                # REFERRAL: only referral_code (no promo_code)
-                acquisition_method = "REFERRAL"
-            else:
-                acquisition_method = "FAIL"  # Will be validated by backend
+        referral_code_clean = (referral_code or "").strip().upper()
+        if not referral_code_clean:
+            raise HAVNValidationError("referral_code is required and cannot be empty")
 
         # Determine if promo_code is HAVN voucher
         # Only send promo_code to HAVN if it's a HAVN voucher
@@ -175,22 +158,28 @@ class TransactionWebhook:
         currency_to_send = currency.upper().strip()
         custom_fields_with_metadata = custom_fields.copy() if custom_fields else {}
 
+        invoice_value = None
+        if invoice_id is not None:
+            if not isinstance(invoice_id, str):
+                raise HAVNValidationError("invoice_id must be a string if provided")
+
+            invoice_value = invoice_id.strip() or None
+
         # Build payload (required fields first)
         payload = TransactionPayload(
             amount=amount_to_send,
             payment_gateway_transaction_id=payment_gateway_transaction_id,
             payment_gateway=gateway_name,
             customer_email=customer_email,
-            referral_code=referral_code,
+            referral_code=referral_code_clean,
             promo_code=promo_code_to_send,  # Only HAVN vouchers are sent
             currency=currency_to_send,  # Uppercase original currency (backend handles conversion)
             customer_type=customer_type,
             subtotal_transaction=subtotal_to_send,
-            acquisition_method=acquisition_method,  # Auto-determined if not provided
             custom_fields=custom_fields_with_metadata
             if custom_fields_with_metadata
             else None,
-            invoice_id=invoice_id,
+            invoice_id=invoice_value,
             transaction_type=transaction_type,
             description=description,
             server_side_conversion=server_side_conversion or None,

@@ -543,10 +543,12 @@ result = client.vouchers.get_all(display_currency="IDR")
 
 for voucher in result.data:
     print(f"Code: {voucher.code}")
-    print(f"Value: {voucher.value} IDR")  # Converted from USD
-    print(f"Min Purchase: {voucher.min_purchase} IDR")  # Converted
-    print(f"Currency: {voucher.currency}")  # "IDR"
-    # Hanya HAVN vouchers yang di-convert, local vouchers keep original currency
+    display_currency = voucher.display_currency or voucher.currency
+    print(f"Value (display): {voucher.value} {display_currency}")
+    print(f"Min Purchase (display): {voucher.min_purchase} {display_currency}")
+    print(f"Currency (audit): {voucher.currency}")
+    print(f"Configured currency: {voucher.configured_currency}")
+    # Hanya HAVN vouchers yang dikonversi; local vouchers tetap memakai currency mereka
 ```
 
 ### 6. Get Combined Vouchers dengan Currency Conversion
@@ -574,9 +576,11 @@ result = client.vouchers.get_combined(
 
 for voucher in result.data:
     if voucher.is_havn_voucher:
-        print(f"HAVN: {voucher.code} - {voucher.currency} IDR")  # Converted
+        print(
+            f"HAVN: {voucher.code} - {voucher.value} {voucher.display_currency or voucher.currency}"
+        )
     else:
-        print(f"Local: {voucher.code} - {voucher.currency} IDR")  # Original
+        print(f"Local: {voucher.code} - {voucher.value} {voucher.currency}")
 ```
 
 ---

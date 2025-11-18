@@ -176,6 +176,17 @@ def get_combined(
 }
 ```
 
+
+## Field Notes (v1.1.6+)
+
+- `currency`: Audit currency yang disimpan HAVN (biasanya USD untuk HAVN vouchers). Nilai numeric pada field seperti `value`/`min_purchase` selalu dinyatakan dalam currency ini ketika `display_currency` tidak digunakan.
+- `configured_currency`: Currency default SaaS yang dikonfigurasi di HAVN. Gunakan untuk mengetahui preferensi tenant tanpa melihat request Anda.
+- `display_currency`: Currency yang dipakai HAVN backend ketika Anda memanggil `display_currency` di request. Nilai numeric untuk HAVN vouchers sudah dikonversi ke currency ini, sementara local vouchers tetap memakai currency masing-masing.
+- `raw_response`: Snapshot payload asli dari backend. Sangat berguna untuk debugging ketika Anda butuh memeriksa field tambahan tanpa menunggu rilis SDK.
+
+Gunakan kombinasi field tersebut untuk membedakan: currency asal (audit), currency konfigurasi tenant, dan currency yang sedang ditampilkan ke end-user.
+
+---
 ---
 
 ## Contoh Penggunaan
@@ -213,7 +224,9 @@ print(f"Total vouchers: {result.pagination.total}")
 print(f"Page {result.pagination.page} of {result.pagination.total_pages}")
 
 for voucher in result.data:
-    print(f"{voucher.code}: {voucher.value} {voucher.currency}")
+    print(
+        f"{voucher.code}: {voucher.value} {voucher.display_currency or voucher.currency}"
+    )
 ```
 
 ### 3. Filter Active Vouchers
@@ -253,7 +266,14 @@ result = client.vouchers.get_all(
 
 for voucher in result.data:
     source = "HAVN" if voucher.is_havn_voucher else "Local"
-    print(f"{source} {voucher.code}: {voucher.value} {voucher.currency}")
+    audit_currency = voucher.currency
+    display_currency = voucher.display_currency or voucher.currency
+    print(
+        f"{source} {voucher.code}: {voucher.value} {display_currency} (audit: {audit_currency})"
+    )
+    if voucher.configured_currency:
+        print(f"Configured currency: {voucher.configured_currency}")
+    print(f"Raw payload currency: {voucher.raw_response.get('currency')}")
 ```
 
 ### 6. Combine dengan Local Vouchers
@@ -327,15 +347,16 @@ result = client.vouchers.get_all(
 # Format untuk display
 vouchers_display = []
 for v in result.data:
+    display_currency = v.display_currency or v.currency
     if v.type == "DISCOUNT_PERCENTAGE":
         discount_text = f"{v.value}%"
     else:
-        discount_text = f"Rp {v.value:,}"  # Backend sudah mengembalikan IDR
+        discount_text = f"{display_currency} {v.value:,}"
 
     vouchers_display.append({
         "code": v.code,
         "description": f"Diskon {discount_text}",
-        "min_purchase": f"Min. Rp {v.min_purchase:,}",
+        "min_purchase": f"Min. {display_currency} {v.min_purchase:,}",
         "expires": v.valid_until
     })
 

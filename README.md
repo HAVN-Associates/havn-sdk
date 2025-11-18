@@ -22,6 +22,12 @@ SDK resmi untuk menghubungkan SaaS Anda ke HAVN (Hierarchical Associate Voucher 
 - **Voucher Flow Disederhanakan**: `client.vouchers.validate()`, `get_all()`, dan `get_combined()` tidak lagi melakukan konversi lokal; gunakan `display_currency` untuk meminta tampilan tertentu dari backend.
 - **Utilitas Konversi Didepresiasi**: `convert_to_usd_cents()` dan `convert_from_usd_cents()` masih tersedia untuk debugging/tampilan, namun akan dihapus pada rilis mendatang. Gunakan backend sebagai sumber kebenaran.
 
+### Pembaruan Penting v1.1.6
+
+- **Voucher Payload Enrichment**: Response `VoucherData` kini menyertakan `configured_currency` (currency default SaaS) dan `display_currency` (currency hasil konversi backend) sehingga frontend dapat membedakan nilai audit vs tampilan.
+- **Raw Payload Snapshot**: Setiap voucher juga membawa `raw_response` untuk debugging/observability sehingga Anda bisa melihat struktur asli dari HAVN backend tanpa perlu logging terpisah.
+- **Dokumentasi Diperbarui**: Lihat `docs/VOUCHER_WEBHOOK.md` dan `docs/EXAMPLES.md` untuk contoh cara memanfaatkan field baru tersebut pada checkout flow.
+
 ## Navigasi Dokumentasi
 
 | File | Fokus Utama | Manfaat Membacanya |

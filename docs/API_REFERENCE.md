@@ -843,7 +843,7 @@ def get_all(
 | `is_expired`        | `bool` | No       | `None`  | Filter by expired status                                                                                                                                                                                                                                                          |
 | `sort_by`           | `str`  | No       | `None`  | Sort field (code, type, value, start_date, end_date, created_date, current_usage)                                                                                                                                                                                                 |
 | `sort_order`        | `str`  | No       | `desc`  | Sort direction (asc, desc)                                                                                                                                                                                                                                                        |
-| `display_currency`  | `str`  | No       | `None`  | Target currency untuk convert amounts (optional)<br>- Jika None: amounts dalam original currency (USD untuk HAVN vouchers)<br>- Jika provided: amounts di-convert ke target currency untuk display<br>- Hanya berlaku untuk HAVN vouchers (local vouchers keep original currency) |
+| `display_currency`  | `str`  | No       | `None`  | Target currency untuk display.<br>- Backend HAVN mengisi `VoucherData.display_currency` saat mengkonversi HAVN voucher amounts ke currency ini (sementara `currency` tetap menjadi audit currency, umumnya USD).<br>- Local vouchers tidak terpengaruh dan mempertahankan currency masing-masing. |
 
 ##### Returns
 
@@ -965,7 +965,7 @@ def get_combined(
 | `is_expired`              | `bool`                               | No       | `None`  | Filter by expired status                                                                                                                                                                                                              |
 | `sort_by`                 | `str`                                | No       | `None`  | Sort field (code, type, value, start_date, end_date, created_date, current_usage)                                                                                                                                                     |
 | `sort_order`              | `str`                                | No       | `desc`  | Sort direction (asc, desc)                                                                                                                                                                                                            |
-| `display_currency`        | `str`                                | No       | `None`  | Target currency untuk convert HAVN voucher amounts (optional)<br>- Jika None: HAVN voucher amounts dalam USD<br>- Jika provided: HAVN voucher amounts di-convert ke target currency<br>- Local vouchers selalu keep original currency |
+| `display_currency`        | `str`                                | No       | `None`  | Target currency untuk display HAVN vouchers.<br>- Backend akan menyetel `VoucherData.display_currency` dan mengembalikan nilai yang sudah dikonversi, sementara `currency` tetap menunjuk ke currency asli (biasanya USD).<br>- Local vouchers tetap memakai currency masing-masing. |
 
 ##### Returns
 
@@ -1312,7 +1312,9 @@ Voucher data dari list response.
 - `value` (`int`): Voucher value (cents atau basis points)
 - `min_purchase` (`Optional[int]`): Minimum purchase requirement (cents)
 - `max_purchase` (`Optional[int]`): Maximum purchase limit (cents)
-- `currency` (`str`): Currency code (dapat di-convert via `display_currency`)
+- `currency` (`str`): Currency code asli (audit currency, biasanya USD untuk HAVN vouchers)
+- `configured_currency` (`Optional[str]`): Currency default SaaS/company jika berbeda dari currency voucher
+- `display_currency` (`Optional[str]`): Currency yang digunakan HAVN backend ketika Anda meminta `display_currency` pada request (nilai numeric sudah dikonversi ke currency ini)
 - `active` (`bool`): Apakah voucher aktif
 - `start_date` (`Optional[str]`): Start date (YYYY-MM-DD)
 - `end_date` (`Optional[str]`): End date (YYYY-MM-DD)
@@ -1324,7 +1326,8 @@ Voucher data dari list response.
 - `description` (`Optional[str]`): Voucher description
 - `client_type` (`Optional[str]`): Client type (NEW_CUSTOMER, RECURRING)
 - `created_date` (`Optional[str]`): Created timestamp
-- `creation_cost` (`Optional[int]`): Creation cost (cents, dapat di-convert via `display_currency`)
+- `creation_cost` (`Optional[int]`): Creation cost (selalu mengikuti currency pada field `currency` / `display_currency` sesuai respons backend)
+- `raw_response` (`Dict[str, Any]`): Snapshot payload asli dari backend (berguna untuk debugging/observability)
 
 **Example:**
 
@@ -1334,9 +1337,12 @@ for voucher in result.data:
     print(f"Code: {voucher.code}")
     print(f"Type: {voucher.type}")
     print(f"Value: {voucher.value}")
-    print(f"Currency: {voucher.currency}")
+    print(f"Currency (audit): {voucher.currency}")
+    print(f"Display currency: {voucher.display_currency or voucher.currency}")
     print(f"Is HAVN: {voucher.is_havn_voucher}")
     print(f"Is Valid: {voucher.is_valid}")
+    print(f"Configured currency: {voucher.configured_currency}")
+    print(f"Raw payload currency: {voucher.raw_response.get('currency')}")
 ```
 
 #### VoucherListPagination

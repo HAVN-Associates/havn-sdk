@@ -17,6 +17,7 @@ class TestTransactionPayload:
         payload = TransactionPayload(
             amount=10000,
             payment_gateway_transaction_id="txn_12345",
+            payment_gateway="STRIPE",
             customer_email="customer@example.com",
             referral_code="HAVN-MJ-001",
             currency="USD",
@@ -28,6 +29,7 @@ class TestTransactionPayload:
         payload = TransactionPayload(
             amount=-100,
             payment_gateway_transaction_id="txn_12345",
+            payment_gateway="STRIPE",
             customer_email="customer@example.com",
             referral_code="HAVN-MJ-001"
         )
@@ -39,6 +41,7 @@ class TestTransactionPayload:
         payload = TransactionPayload(
             amount=10000,
             payment_gateway_transaction_id="txn_12345",
+            payment_gateway="STRIPE",
             customer_email="customer@example.com",
             currency="XYZ"
         )
@@ -50,10 +53,22 @@ class TestTransactionPayload:
         payload = TransactionPayload(
             amount=10000,
             payment_gateway_transaction_id="txn_12345",
+            payment_gateway="STRIPE",
             customer_email="customer@example.com",
             customer_type="INVALID",
         )
         with pytest.raises(ValueError, match="Invalid customer_type"):
+            payload.validate()
+
+    def test_missing_payment_gateway(self):
+        """payment_gateway must be provided"""
+        payload = TransactionPayload(
+            amount=10000,
+            payment_gateway_transaction_id="txn_12345",
+            payment_gateway="",
+            customer_email="customer@example.com",
+        )
+        with pytest.raises(ValueError, match="payment_gateway is required"):
             payload.validate()
 
     def test_to_dict_removes_none(self):
@@ -61,6 +76,7 @@ class TestTransactionPayload:
         payload = TransactionPayload(
             amount=10000,
             payment_gateway_transaction_id="txn_12345",
+            payment_gateway="STRIPE",
             customer_email="customer@example.com",
             referral_code="HAVN-MJ-001",
             promo_code=None,
@@ -75,6 +91,7 @@ class TestTransactionPayload:
         payload = TransactionPayload(
             amount=12000,
             payment_gateway_transaction_id="txn_flag",
+            payment_gateway="MIDTRANS",
             customer_email="customer@example.com",
             currency="IDR",
             server_side_conversion=True,
@@ -84,6 +101,7 @@ class TestTransactionPayload:
         invalid_payload = TransactionPayload(
             amount=12000,
             payment_gateway_transaction_id="txn_flag",
+            payment_gateway="MIDTRANS",
             customer_email="customer@example.com",
             server_side_conversion="yes",
         )

@@ -14,6 +14,7 @@ class TransactionPayload:
     Attributes:
         amount: Final transaction amount in cents (required)
         payment_gateway_transaction_id: Payment gateway transaction ID (required)
+        payment_gateway: Payment gateway identifier/name (required)
         customer_email: Customer email (required, valid email format)
         referral_code: Associate referral code (optional)
         promo_code: Voucher code (optional)
@@ -38,6 +39,7 @@ class TransactionPayload:
 
     amount: int
     payment_gateway_transaction_id: str  # Required: Payment gateway transaction ID
+    payment_gateway: str  # Required: Payment gateway identifier
     customer_email: str  # Required: Customer email
     referral_code: Optional[str] = None
     promo_code: Optional[str] = None
@@ -111,6 +113,13 @@ class TransactionPayload:
             raise ValueError(
                 "payment_gateway_transaction_id cannot exceed 200 characters"
             )
+
+        # Validate payment_gateway (required, <= 100 chars to match backend model)
+        if not self.payment_gateway or not self.payment_gateway.strip():
+            raise ValueError("payment_gateway is required and cannot be empty")
+
+        if len(self.payment_gateway.strip()) > 100:
+            raise ValueError("payment_gateway cannot exceed 100 characters")
 
         # Validate customer_email (required, non-empty, valid format)
         if not self.customer_email or not self.customer_email.strip():

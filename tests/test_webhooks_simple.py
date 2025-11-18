@@ -37,6 +37,7 @@ class TestWebhooksClientAPI:
             result = self.client.transactions.send(
                 amount=10000,
                 payment_gateway_transaction_id="pg_txn_123",
+                payment_gateway="STRIPE",
                 customer_email="customer@example.com",
                 referral_code="HAVN-MJ-001"
             )
@@ -76,6 +77,7 @@ class TestWebhooksClientAPI:
             result = self.client.transactions.send(
                 amount=8000,
                 payment_gateway_transaction_id="pg_txn_123",
+                payment_gateway="STRIPE",
                 customer_email="customer@example.com",
                 referral_code="HAVN-MJ-001",
                 promo_code="VOUCHER123",
@@ -105,6 +107,7 @@ class TestWebhooksClientAPI:
             self.client.transactions.send(
                 amount=150000,
                 payment_gateway_transaction_id="pg_txn_ssc",
+                payment_gateway="MIDTRANS",
                 customer_email="customer@example.com",
                 referral_code="HAVN-MJ-001",
                 currency="IDR",

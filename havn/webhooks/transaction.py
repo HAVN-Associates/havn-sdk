@@ -36,6 +36,7 @@ class TransactionWebhook:
         self,
         amount: int,
         payment_gateway_transaction_id: str,
+        payment_gateway: str,
         customer_email: str,
         referral_code: Optional[str] = None,
         promo_code: Optional[str] = None,
@@ -69,6 +70,7 @@ class TransactionWebhook:
             payment_gateway_transaction_id: Payment gateway transaction ID (required)
                 - Must be non-empty string
                 - Max 200 characters
+            payment_gateway: Payment gateway identifier/name (required, e.g., "MIDTRANS", "STRIPE")
             customer_email: Customer email (required, valid email format)
             referral_code: Associate referral code (optional)
             promo_code: Voucher code (HAVN or local).
@@ -140,6 +142,13 @@ class TransactionWebhook:
             ...     referral_code="HAVN-MJ-001"
             ... )
         """
+        if not payment_gateway or not payment_gateway.strip():
+            raise HAVNValidationError(
+                "payment_gateway is required and cannot be empty"
+            )
+
+        gateway_name = payment_gateway.strip().upper()
+
         # Auto-determine acquisition_method if not provided (before voucher check)
         if not acquisition_method:
             if promo_code and is_havn_voucher_code(promo_code) and referral_code:
@@ -170,6 +179,7 @@ class TransactionWebhook:
         payload = TransactionPayload(
             amount=amount_to_send,
             payment_gateway_transaction_id=payment_gateway_transaction_id,
+            payment_gateway=gateway_name,
             customer_email=customer_email,
             referral_code=referral_code,
             promo_code=promo_code_to_send,  # Only HAVN vouchers are sent

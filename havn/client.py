@@ -16,7 +16,8 @@ from .exceptions import (
     HAVNNetworkError,
     HAVNRateLimitError,
 )
-from .webhooks import TransactionWebhook, UserSyncWebhook, VoucherWebhook, AuthWebhook
+from .webhooks import TransactionWebhook, VoucherWebhook, AuthWebhook
+# UserSyncWebhook removed - deprecated (user management on SaaS side)
 from .utils.auth import build_auth_headers
 from .constants import (
     HTTP_METHOD_GET,
@@ -188,7 +189,12 @@ class HAVNClient:
 
         # Initialize webhook handlers
         self.transactions = TransactionWebhook(self)
-        self.users = UserSyncWebhook(self)
+        
+        # DEPRECATED: User sync is no longer supported
+        # User management should be handled on SaaS company side
+        # Referral data is passed via public referral links (query params)
+        # self.users = UserSyncWebhook(self)  # Disabled - see REFERRAL_PUBLIC_LINK.md
+        
         self.vouchers = VoucherWebhook(self)
         self.auth = AuthWebhook(self)
 

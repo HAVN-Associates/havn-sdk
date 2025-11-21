@@ -1,7 +1,23 @@
 """
 User sync webhook handler
+
+DEPRECATED: This module is no longer supported as of HAVN SDK v2.0.0
+
+User management should now be handled on the SaaS company side.
+Referral data is passed via public referral links using query parameters.
+
+See docs/REFERRAL_PUBLIC_LINK.md for the new integration approach.
+
+Migration Guide:
+1. Remove all client.users.sync() and client.users.sync_bulk() calls
+2. Implement referral param capture in your login page
+3. Attach referral data to users after successful login
+4. Use existing client.transactions.send() for transaction tracking
+
+For more details, see: https://docs.havn.com/referral-public-link
 """
 
+import warnings
 from typing import Optional, List, Dict, Any
 from ..models.user_sync import (
     UserSyncPayload,
@@ -15,26 +31,40 @@ from ..exceptions import HAVNValidationError
 class UserSyncWebhook:
     """
     User sync webhook handler
+    
+    .. deprecated:: 2.0.0
+        User sync is no longer supported. Use public referral links instead.
+        See docs/REFERRAL_PUBLIC_LINK.md for migration guide.
 
     Handles syncing user data from Google OAuth or other sources.
 
-    Example:
+    Example (DEPRECATED):
+        >>> # THIS NO LONGER WORKS - DO NOT USE
         >>> client = HAVNClient(api_key="...", webhook_secret="...")
-        >>> result = client.users.sync(
+        >>> result = client.users.sync(  # DEPRECATED
         ...     email="user@example.com",
         ...     name="John Doe",
         ...     google_id="google123"
         ... )
-        >>> print(f"User created: {result.user_created}")
     """
 
     def __init__(self, client):
         """
         Initialize user sync webhook handler
+        
+        .. deprecated:: 2.0.0
+            This class is deprecated and will be removed in v3.0.0
 
         Args:
             client: HAVNClient instance
         """
+        warnings.warn(
+            "UserSyncWebhook is deprecated and will be removed in v3.0.0. "
+            "User management should be handled on SaaS company side. "
+            "See docs/REFERRAL_PUBLIC_LINK.md for migration guide.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.client = client
 
     def sync(
@@ -52,6 +82,9 @@ class UserSyncWebhook:
     ) -> UserSyncResponse:
         """
         Sync user data to HAVN API
+        
+        .. deprecated:: 2.0.0
+            This method is deprecated. Handle user creation on your SaaS side.
 
         Args:
             email: User email (required)
@@ -126,6 +159,9 @@ class UserSyncWebhook:
     ) -> BulkUserSyncResponse:
         """
         Sync multiple users to HAVN API (bulk sync)
+        
+        .. deprecated:: 2.0.0
+            This method is deprecated. Handle user creation on your SaaS side.
 
         Args:
             users: List of user data dictionaries (required, max 50)

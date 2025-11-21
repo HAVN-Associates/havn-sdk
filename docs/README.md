@@ -2,16 +2,31 @@
 
 Dokumentasi lengkap untuk HAVN Python SDK, terpisah per fitur webhook.
 
+## 🎯 What's New in v2.0
+
+**Public Referral Links** - Sistem referral stateless dengan query parameters!
+- ✅ No Redis/session storage needed
+- ✅ Works with all login gateways (Google, Email, Magic Link, etc.)
+- ✅ Minimal code changes required
+- ✅ **See [REFERRAL_PUBLIC_LINK.md](REFERRAL_PUBLIC_LINK.md)** for complete guide
+
+**Breaking Changes:**
+- ❌ User sync deprecated (`client.users.sync()` removed)
+- ✅ User management now handled on SaaS company side
+
+---
+
 ## 📚 Daftar Dokumentasi
 
 ### Webhook Features
 
 | Dokumen | Deskripsi | Key Features |
 |---------|-----------|--------------|
-| **[Auth Webhook](AUTH_WEBHOOK.md)** | User login via webhook | Email validation, temporary token, auto-redirect |
+| **[Referral Public Link](REFERRAL_PUBLIC_LINK.md)** | **NEW!** Public referral integration | Stateless, query params, all login gateways |
 | **[Transaction Webhook](TRANSACTION_WEBHOOK.md)** | Kirim transaksi & distribusi komisi | Multi-currency, voucher support, custom fields |
-| **[User Sync Webhook](USER_SYNC_WEBHOOK.md)** | Sync user data ke HAVN | Single/bulk sync, role management, upline hierarchy |
 | **[Voucher Webhook](VOUCHER_WEBHOOK.md)** | Validasi & manajemen voucher | Validation, filtering, pagination, combine local |
+| **[Auth Webhook](AUTH_WEBHOOK.md)** | User login via webhook | Email validation, temporary token, auto-redirect |
+| ~~**[User Sync Webhook](USER_SYNC_WEBHOOK.md)**~~ | ~~Sync user data ke HAVN~~ | **DEPRECATED** - Use public referral links |
 
 ---
 
@@ -21,17 +36,17 @@ Dokumentasi lengkap untuk HAVN Python SDK, terpisah per fitur webhook.
 
 **Saya ingin...**
 
-- **Login user ke HAVN dari SaaS saya**  
-  → [Auth Webhook](AUTH_WEBHOOK.md)
+- **Integrate public referral links**  
+  → [Referral Public Link](REFERRAL_PUBLIC_LINK.md) ⭐ NEW!
 
 - **Kirim transaksi dan hitung komisi**  
   → [Transaction Webhook](TRANSACTION_WEBHOOK.md)
 
-- **Sync user dari Google OAuth**  
-  → [User Sync Webhook - sync()](USER_SYNC_WEBHOOK.md#method-sync)
+- **Login user ke HAVN dari SaaS saya**  
+  → [Auth Webhook](AUTH_WEBHOOK.md)
 
-- **Sync banyak users sekaligus**  
-  → [User Sync Webhook - sync_bulk()](USER_SYNC_WEBHOOK.md#method-sync_bulk)
+- ~~**Sync user dari Google OAuth**~~  
+  → **DEPRECATED** - Use referral public links instead
 
 - **Validasi kode voucher**  
   → [Voucher Webhook - validate()](VOUCHER_WEBHOOK.md#method-validate)
